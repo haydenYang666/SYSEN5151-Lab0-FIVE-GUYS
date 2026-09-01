@@ -40,28 +40,28 @@
     </style>
 </head>
 <body>
-    <div class="container">
+   <div class="container">
         <h2>SYSEN 5151 Readiness Check Item #5</h2>
-        <p>点击下方按钮测试前端 UI 与 Python 本地 API 的连通性：</p>
-        <button onclick="fetchApiData()">调用 API</button>
-        <div id="result">等待点击...</div>
+        <p>Click the button below to test connectivity between the frontend UI and the local Python API:</p>
+        <button onclick="fetchApiData()">Call API</button>
+        <div id="result">Waiting for click...</div>
     </div>
 
-    <script>
-        async function fetchApiData() {
-            const resultDiv = document.getElementById('result');
-            resultDiv.innerText = "正在请求 API 数据...";
-            try {
-                // 向本地 FastAPI 后端发起 HTTP GET 请求
-                const response = await fetch('http://127.0.0.1:8000/api/hello');
-                const data = await response.json();
-                
-                // 将后端返回的 JSON 数据渲染展示到前端页面
-                resultDiv.innerText = JSON.stringify(data, null, 2);
-            } catch (error) {
-                resultDiv.innerText = "请求失败，请确保后端 uvicorn 服务在 8000 端口正确运行。错误：" + error;
-            }
+<script>
+    async function fetchApiData() {
+        const resultDiv = document.getElementById('result');
+        resultDiv.innerText = "Requesting API data...";
+        try {
+            // Send an HTTP GET request to the local FastAPI backend
+            const response = await fetch('http://127.0.0.1:8000/api/hello');
+            const data = await response.json();
+
+            // Render the JSON data returned from the backend onto the frontend page
+            resultDiv.innerText = JSON.stringify(data, null, 2);
+        } catch (error) {
+            resultDiv.innerText = "Request failed. Please ensure the backend uvicorn service is running correctly on port 8000. Error: " + error;
         }
-    </script>
+    }
+</script>
 </body>
 </html>
