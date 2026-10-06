@@ -1,0 +1,101 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>RescuTech Walking Skeleton</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Geist:wght@400;500;600;700&family=Geist+Mono:wght@400;500;600&display=swap">
+<link rel="stylesheet" href="styles.css">
+</head>
+<body>
+<!--APP-->
+<div class="shell">
+  <header class="topbar">
+    <div class="brand">
+      <span class="logo" aria-hidden="true"><span></span></span>
+      <span class="brand-name">RescuTech</span>
+      <span class="brand-sub">Disaster Response Agent Orchestrator</span>
+    </div>
+    <nav class="tabs" role="tablist" aria-label="Views">
+      <button type="button" role="tab" id="tab-demo" aria-selected="true" data-view="demo">Demo</button>
+      <button type="button" role="tab" id="tab-arch" aria-selected="false" data-view="arch">System context</button>
+      <button type="button" role="tab" id="tab-trace" aria-selected="false" data-view="trace">Traceability</button>
+    </nav>
+    <div class="top-right">
+      <span class="transport" id="transport"><i></i><span>Connecting…</span></span>
+      <button type="button" class="btn ghost sm" id="btn-restart">Restart run</button>
+    </div>
+  </header>
+
+  <section class="hero">
+    <p class="eyebrow">SYSEN 5151 · Team 15 · Milestone 1 walking skeleton · Innoslate project 584</p>
+    <h1>From distress report to acknowledged dispatch, with a human in charge.</h1>
+    <p class="lede">RescuTech structures citizens’ distress reports during a simulated Tompkins County snowstorm and recommends a rescue team. The Emergency Coordinator approves every dispatch. This skeleton runs the primary use case UC.1 end to end through every participant in the sequence diagram.</p>
+    <ul class="stats" id="stats"></ul>
+  </section>
+
+  <!-- DEMO -->
+  <section id="view-demo" class="view" role="tabpanel" aria-labelledby="tab-demo">
+    <ol class="stepper" id="stepper" aria-label="UC.1 steps"></ol>
+    <div class="demo-grid">
+      <article class="stage-card">
+        <div class="stage-head" id="stage-head"></div>
+        <div class="stage" id="stage" aria-live="polite"></div>
+      </article>
+      <aside class="side">
+        <section class="card">
+          <div class="card-head"><h2>Sequence diagram</h2><span class="hint">UC.1 · live from this run</span></div>
+          <div class="seq-wrap" id="seq-wrap"><svg id="seq" role="img" aria-label="Sequence diagram of messages in this run"></svg></div>
+        </section>
+        <section class="card">
+          <div class="card-head"><h2>Model link</h2><span class="hint">need → requirement → model → code</span></div>
+          <div id="link"></div>
+        </section>
+        <section class="card">
+          <div class="card-head"><h2>API requests</h2><span class="hint" id="req-mode"></span></div>
+          <ol class="reqs" id="reqs"><li class="empty">No requests yet.</li></ol>
+        </section>
+      </aside>
+    </div>
+  </section>
+
+  <!-- ARCHITECTURE -->
+  <section id="view-arch" class="view" role="tabpanel" aria-labelledby="tab-arch" hidden>
+    <div class="arch-grid">
+      <article class="card pad-lg">
+        <div class="card-head"><h2>System context</h2><span class="hint">S.1 and its external actors, from the Innoslate context diagram</span></div>
+        <div class="ctx-wrap"><svg id="ctx" viewBox="0 0 1160 510" role="img" aria-label="System context diagram"></svg></div>
+      </article>
+      <article class="card pad-lg">
+        <div class="card-head"><h2>Boundary elements in the repository</h2><span class="hint">one directory per model element (Lab Manual §1.4)</span></div>
+        <div class="table-scroll"><table class="tbl" id="boundary"></table></div>
+      </article>
+    </div>
+  </section>
+
+  <!-- TRACEABILITY -->
+  <section id="view-trace" class="view" role="tabpanel" aria-labelledby="tab-trace" hidden>
+    <article class="card pad-lg">
+      <div class="card-head wrap">
+        <div><h2>Need → requirement → model → code → check</h2><span class="hint">UN.1 needs, SRD.1 requirements, UC.1 Action Diagram. Checks run the same REST routes as the demo.</span></div>
+        <button type="button" class="btn primary" id="btn-checks">Run acceptance checks</button>
+      </div>
+      <div class="coverage" id="coverage"></div>
+      <div class="table-scroll"><table class="tbl trace" id="trace"></table></div>
+    </article>
+  </section>
+
+  <footer class="foot">Coursework prototype. Simulated data only; team names and distances are fictional and no real agency is connected. Recommendations are advisory and every dispatch needs coordinator approval.</footer>
+</div>
+<!--/APP-->
+<script src="../incident-structuring-agent/agent.stub.js"></script>
+<script src="../resource-status-source/teams.stub.js"></script>
+<script src="../rescutech-orchestrator/workflow.js"></script>
+<script src="../rescutech-orchestrator/routes.js"></script>
+<script src="../tests/acceptance.spec.js"></script>
+<script src="model-trace.js"></script>
+<script src="api-client.js"></script>
+<script src="app.js"></script>
+</body>
+</html>

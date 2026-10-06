@@ -1,0 +1,11 @@
+{
+  "name": "rescutech",
+  "version": "0.2.0",
+  "private": true,
+  "description": "SYSEN 5151 Team 15 — RescuTech walking skeleton for UC.1 (no dependencies)",
+  "scripts": {
+    "start": "node rescutech-orchestrator/server.js",
+    "test": "node tests/acceptance.spec.js"
+  },
+  "engines": { "node": ">=18" }
+}
