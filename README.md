@@ -21,7 +21,8 @@ the software boundary.
 
 ```bash
 npm start          # http://localhost:3000  — front end + REST API, no dependencies (Node 18+)
-npm test           # 12 need-linked acceptance checks (also run by CI on every push)
+npm test           # 12 need-linked acceptance checks + 5 interface-contract checks (also run by CI on every push)
+npm run generate:stubs   # regenerate contracts/generated/ after changing contracts/api-v1.yaml
 ```
 
 You can also open `frontend/index.html` directly from disk; it then runs the same route table in the page.
@@ -42,12 +43,15 @@ Open traceability.
 
 | Directory | Model element | Role | Status |
 |-----------|---------------|------|--------|
-| `rescutech-orchestrator/` | S.1 RescuTech | Service layer: UC.1 actions (`workflow.js`), REST routes (`routes.js`), server | Real |
+| `rescutech-orchestrator/` | S.1 RescuTech | Service layer: orchestration of the internal flows (`workflow.js`), REST routes (`routes.js`), server | Real |
+| `rescutech-orchestrator/functions/` | F.2.1–F.2.5, first-level functions of F.2 | One module per subfunction; modules talk only through `contracts/api-v1.yaml` | Real (F.2.2/F.2.4 call stubs) |
+| `contracts/` | Internal flows IO.10–IO.14 | Internal interface contract v1 (OpenAPI) and stubs generated from it | Real |
+| `scripts/` | — | Stub generator and its dependency-free YAML reader | — |
 | `incident-structuring-agent/` | Model participant inside S.1 | Keyword stub returning the final structured-incident schema | Stub |
 | `resource-status-source/` | X.3 Rescue Team as status source | Five fictional teams | Stub |
 | `frontend/` | X.1, X.2, X.3 user interfaces (Interfaces 1, 3, 4) | Citizen phone, coordinator console, team tablet | Real |
-| `tests/` | SR.12 | Need-linked acceptance checks | Real |
-| `docs/` | — | Context inventory, walking skeleton call list, traceability, prompt log, decisions | — |
+| `tests/` | SR.12 | Need-linked acceptance checks; contract conformance checks | Real |
+| `docs/` | — | Context inventory, walking skeleton call list, traceability, route table, prompt log, decisions | — |
 
 ## 4. API (one route per sequence-diagram message group)
 
@@ -62,6 +66,23 @@ Open traceability.
 | `POST /api/recommendations/:id/dispatch-order` | UC.1.11 (409 without approval) | SR.6, SR.8 |
 | `POST /api/dispatch-orders/:id/acknowledgment` | UC.1.12–1.13 | SR.9 |
 | `GET /api/dispatch-orders/:id/status` | UC.1.14–1.15 | SR.7 |
+
+### Internal interfaces (Lab 7, `contracts/api-v1.yaml`)
+
+The first-level IDEF0 of F.2 has five internal flows. Each one crosses a module boundary only through an
+operation of the contract; `tests/contract.spec.js` checks every call against the schemas. See
+`docs/decisions/0003-*.md` and `0004-*.md` for where the contract changed the code.
+
+| Flow | From → To | Contract operation |
+|------|-----------|--------------------|
+| IO.10 Registered Report | F.2.1 → F.2.2 | `structureIncident` (request) |
+| IO.11 Incident Resource Needs | F.2.2 → F.2.3 | `structureIncident` (response) → `requestResourceStatus` (request) |
+| IO.12 Structured Incident | F.2.2 → F.2.4 | `structureIncident` (response) → `recommendResourceAssignment` (request) |
+| IO.13 Current Resource Availability | F.2.3 → F.2.4 | `getCurrentResourceAvailability` (response) → `recommendResourceAssignment` (request) |
+| IO.14 Proposed Assignment | F.2.4 → F.2.5 | `recommendResourceAssignment` (response) → `acceptProposedAssignment` (request) |
+
+The entry-point audit (`docs/route-table.md`, Lab 6) maps every route above to UC.1; four extra routes
+(`/api/health`, `/api/reset`, `/api/teams`, `/api/log`) are a demonstration and test harness (ADR 0002).
 
 ## 5. Intended use, limitations, and responsibilities (SR.11)
 
