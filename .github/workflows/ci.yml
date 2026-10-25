@@ -10,3 +10,5 @@ jobs:
           node-version: 20
       - name: Need-linked acceptance checks (SR.12)
         run: node tests/acceptance.spec.js
+      - name: Internal interface contract checks (contracts/api-v1.yaml, Lab 7)
+        run: node tests/contract.spec.js
