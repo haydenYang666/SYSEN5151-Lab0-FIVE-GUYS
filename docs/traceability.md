@@ -3,12 +3,16 @@
 IDs refer to Innoslate project 584 (UN.1, SRD.1, UC.1 Action Diagram). The same table is rendered in the
 demo's Traceability view from `frontend/model-trace.js`.
 
+Since Lab 7 the code for each step lives in the module of the first-level function that performs it
+(`rescutech-orchestrator/functions/f2-1-…` to `f2-5-…`); `workflow.js` keeps the UC.1 function names listed below
+and forwards to those modules through `contracts/api-v1.yaml`.
+
 | Need | Requirement | Model step (UC.1 actions) | Code | Check |
 |------|-------------|---------------------------|------|-------|
 | N.1 | SR.1 | UC.1.1 Submit Distress Report | `submitDistressReport()` | N.1 / SR.1 tests |
 | N.2 | SR.2 | UC.1.2 Register Distress Report, UC.1.3 Receive Report Receipt | `registerDistressReport()` | N.2 / SR.2 test |
 | N.3 | SR.3 | UC.1.4 Structure Incident Information | `structureIncidentInformation()` → `incident-structuring-agent/agent.stub.js` | N.3 / SR.3 test |
-| N.4 | SR.4 | UC.1.7 Evaluate Resource Suitability, UC.1.8 Present Dispatch Recommendation | `evaluateResourceSuitability()`, `presentDispatchRecommendation()` | N.4 / SR.4 test |
+| N.4 | SR.4 | UC.1.7 Evaluate Resource Suitability, UC.1.8 Present Dispatch Recommendation | F.2.4 `recommendResourceAssignment()` (`functions/f2-4-…`), via `presentDispatchRecommendation()` | N.4 / SR.4 test |
 | N.4 | SR.5 | UC.1.8, UC.1.9 Review Dispatch Recommendation | `rec.rationale`, `reviewDispatchRecommendation()` | N.4 / SR.5 test |
 | N.5 | SR.6 | UC.1.10 Approve Resource Assignment, UC.1.11 Issue Dispatch Order | `approveResourceAssignment()`, guard in `issueDispatchOrder()` | N.5 / SR.6 tests |
 | N.6 | SR.7 | UC.1.14 Present Dispatch Status, UC.1.15 Review Dispatch Status | `presentDispatchStatus()`, `reviewDispatchStatus()` | N.6 / SR.7 test |

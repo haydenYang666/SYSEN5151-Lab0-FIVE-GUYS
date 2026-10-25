@@ -9,8 +9,8 @@
   var Workflow = (typeof module !== 'undefined' && module.exports)
     ? require('./workflow.js') : root.RescuTechWorkflow;
 
-  function createApi() {
-    var wf = Workflow.createWorkflow();
+  function createApi(opts) {
+    var wf = Workflow.createWorkflow(opts);
 
     function guard(fn) {
       try { return fn(); } catch (e) {
@@ -22,7 +22,7 @@
     // [method, pattern, model messages, handler(params, body)]
     var ROUTES = [
       ['GET', '/api/health', [], function () { return { status: 200, body: { ok: true, service: 'RescuTech orchestrator (S.1)' } }; }],
-      ['POST', '/api/reset', [], function () { wf = Workflow.createWorkflow(); return { status: 200, body: { ok: true } }; }],
+      ['POST', '/api/reset', [], function () { wf = Workflow.createWorkflow(opts); return { status: 200, body: { ok: true } }; }],
       ['GET', '/api/teams', [], function () { return { status: 200, body: wf.state.teams }; }],
       ['GET', '/api/log', [], function () { return { status: 200, body: wf.state.log }; }],
 
@@ -32,18 +32,21 @@
       }],
       ['POST', '/api/distress-reports/:id/incident', ['UC.1.4'], function (p) {
         if (!wf.state.reports[p.id]) return { status: 404, body: { error: 'Unknown report ' + p.id } };
-        return { status: 201, body: wf.structureIncidentInformation(p.id) };
+        var inc = wf.structureIncidentInformation(p.id);
+        return inc.error ? { status: 422, body: inc } : { status: 201, body: inc };
       }],
       ['POST', '/api/incidents/:id/status-requests', ['UC.1.5'], function (p) {
-        return { status: 202, body: wf.requestResourceStatus(p.id) };
+        return guard(function () { return { status: 202, body: wf.requestResourceStatus(p.id) }; });
       }],
       ['PUT', '/api/incidents/:id/team-status/:teamId', ['UC.1.6'], function (p, b) {
         return { status: 200, body: wf.provideResourceStatus(p.id, p.teamId, b || {}) };
       }],
       ['POST', '/api/incidents/:id/recommendation', ['UC.1.7', 'UC.1.8', 'UC.1.9'], function (p) {
-        var rec = wf.presentDispatchRecommendation(p.id);
-        wf.reviewDispatchRecommendation(rec.id);
-        return { status: 201, body: rec };
+        return guard(function () {
+          var rec = wf.presentDispatchRecommendation(p.id);
+          wf.reviewDispatchRecommendation(rec.id);
+          return { status: 201, body: rec };
+        });
       }],
       ['POST', '/api/recommendations/:id/approval', ['UC.1.10'], function (p, b) {
         return guard(function () { return { status: 201, body: wf.approveResourceAssignment(p.id, (b && b.by) || 'Emergency Coordinator') }; });
