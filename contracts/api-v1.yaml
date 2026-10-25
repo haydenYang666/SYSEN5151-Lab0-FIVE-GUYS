@@ -1,0 +1,411 @@
+# RescuTech internal interface contract, version 1 (Lab Manual §7.4)
+#
+# Written from the internal-flow list of the first-level IDEF0 of F.2 Orchestrate Rescue Resource Dispatch
+# (Innoslate project 584, checked 2026-10-23), not from the existing code:
+#   IO.10 Registered Report               F.2.1 -> F.2.2
+#   IO.11 Incident Resource Needs         F.2.2 -> F.2.3
+#   IO.12 Structured Incident             F.2.2 -> F.2.4
+#   IO.13 Current Resource Availability   F.2.3 -> F.2.4
+#   IO.14 Proposed Assignment             F.2.4 -> F.2.5
+# Each internal flow is the request body of an operation on its receiving function, or the response of an
+# operation on its sending function, exactly once each way. External flows (IO.1-IO.9) are served by the
+# public REST routes in rescutech-orchestrator/routes.js and are not part of this contract.
+# This file is the authority for what crosses a first-level function boundary. Stubs in contracts/generated/
+# are generated from it (npm run generate:stubs); code conforms to it, checked by tests/contract.spec.js.
+#
+# Format note: plain block YAML only (no anchors, no multi-line strings) so the repository's dependency-free
+# reader in scripts/yaml-subset.js can parse it.
+
+openapi: 3.0.3
+info:
+  title: RescuTech Internal Interface Contract
+  version: 1.0.0
+  description: Interfaces between the first-level functions F.2.1-F.2.5 of S.1 RescuTech Disaster Response Agent Orchestrator.
+
+paths:
+  /internal/f2-2/structure-incident:
+    post:
+      operationId: structureIncident
+      summary: F.2.1 -> F.2.2 delivers IO.10 Registered Report; F.2.2 returns IO.11 and IO.12
+      x-receiver: F.2.2
+      x-module: f2-2-structure-incident-information
+      x-flows-in: [IO.10]
+      x-flows-out: [IO.11, IO.12]
+      x-requirements: [1.1.1, 2.3.1, 2.3.3]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/RegisteredReport'
+      responses:
+        '201':
+          description: Incident structured; both outgoing flows produced.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/StructuringResult'
+        '422':
+          description: Model-generated structured information failed schema validation; no IO.11 or IO.12 is produced and the incident goes to the Emergency Coordinator for manual handling (2.3.1, 2.3.3).
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+  /internal/f2-3/status-requests:
+    post:
+      operationId: requestResourceStatus
+      summary: F.2.2 -> F.2.3 delivers IO.11 Incident Resource Needs; F.2.3 opens a resource-status request (external IO.3)
+      x-receiver: F.2.3
+      x-module: f2-3-track-resource-status
+      x-flows-in: [IO.11]
+      x-flows-out: []
+      x-requirements: [1.2.2]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/IncidentResourceNeeds'
+      responses:
+        '202':
+          description: Status request opened; Rescue Team responses (external IO.4) arrive later.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/StatusRequest'
+
+  /internal/f2-3/availability:
+    post:
+      operationId: getCurrentResourceAvailability
+      summary: F.2.3 -> F.2.4 provides IO.13 Current Resource Availability for one incident
+      x-receiver: F.2.3
+      x-module: f2-3-track-resource-status
+      x-flows-in: []
+      x-flows-out: [IO.13]
+      x-requirements: [1.1.2, 2.1.3, 2.3.2]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/IncidentRef'
+      responses:
+        '200':
+          description: Availability as last reported by each Rescue Team, with report times.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CurrentResourceAvailability'
+        '404':
+          description: No resource-status request is open for this incident.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+  /internal/f2-4/recommendation:
+    post:
+      operationId: recommendResourceAssignment
+      summary: F.2.4 receives IO.12 Structured Incident and IO.13 Current Resource Availability; returns the recommendation (external IO.5) and IO.14 Proposed Assignment
+      x-receiver: F.2.4
+      x-module: f2-4-recommend-resource-assignment
+      x-flows-in: [IO.12, IO.13]
+      x-flows-out: [IO.14]
+      x-requirements: [1.2.3, 2.1.4, 2.3.2]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/RecommendationInput'
+      responses:
+        '201':
+          description: Recommendation produced. proposedAssignment is null when no team matches (2.1.4).
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RecommendationResult'
+
+  /internal/f2-5/proposed-assignments:
+    post:
+      operationId: acceptProposedAssignment
+      summary: F.2.4 -> F.2.5 delivers IO.14 Proposed Assignment; F.2.5 holds it until the Emergency Coordinator's approval (control IO.6)
+      x-receiver: F.2.5
+      x-module: f2-5-manage-dispatch-orders
+      x-flows-in: [IO.14]
+      x-flows-out: []
+      x-requirements: [1.2.4, 2.1.1]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ProposedAssignment'
+      responses:
+        '202':
+          description: Proposed assignment held; no dispatch order exists until a matching approval is recorded.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Accepted'
+        '409':
+          description: A proposed assignment for this recommendation is already held.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+components:
+  schemas:
+    RegisteredReport:
+      description: IO.10 Registered Report - registered distress report passed from registration to incident structuring.
+      x-flow: IO.10
+      type: object
+      required: [reportId, location, description, registeredAt]
+      properties:
+        reportId:
+          type: string
+          description: Identifier issued at registration, for example R-0001.
+        location:
+          type: string
+          description: Location exactly as entered by the Citizen (non-empty).
+        description:
+          type: string
+          description: Assistance description exactly as entered by the Citizen (non-empty).
+        registeredAt:
+          type: string
+          format: date-time
+
+    Zone:
+      description: Simulated area on the Tompkins County scenario grid (not real GIS).
+      type: object
+      required: [name, x, y]
+      properties:
+        name:
+          type: string
+        x:
+          type: number
+          description: East-west position, kilometres on the simulated grid.
+        y:
+          type: number
+          description: North-south position, kilometres on the simulated grid.
+
+    Capability:
+      type: string
+      enum: [snow-access, medical, water-rescue]
+
+    IncidentResourceNeeds:
+      description: IO.11 Incident Resource Needs - resource needs (location, required capability) derived from the structured incident, used to query current resource status.
+      x-flow: IO.11
+      type: object
+      required: [incidentId, zone, requiredCapabilities]
+      properties:
+        incidentId:
+          type: string
+        zone:
+          nullable: true
+          allOf:
+            - $ref: '#/components/schemas/Zone'
+        requiredCapabilities:
+          type: array
+          items:
+            $ref: '#/components/schemas/Capability'
+
+    StructuredIncident:
+      description: IO.12 Structured Incident - structured incident information passed to the recommendation function. Undetermined fields are null and named in missing; never guessed.
+      x-flow: IO.12
+      type: object
+      required: [incidentId, reportId, location, zone, assistanceNeeded, requiredCapabilities, urgency, peopleCount, missing]
+      properties:
+        incidentId:
+          type: string
+        reportId:
+          type: string
+        location:
+          type: string
+          nullable: true
+        zone:
+          nullable: true
+          allOf:
+            - $ref: '#/components/schemas/Zone'
+        assistanceNeeded:
+          type: string
+          nullable: true
+        requiredCapabilities:
+          type: array
+          items:
+            $ref: '#/components/schemas/Capability'
+        urgency:
+          type: string
+          enum: [High, Standard]
+        peopleCount:
+          type: integer
+          minimum: 0
+          nullable: true
+        missing:
+          type: array
+          items:
+            type: string
+
+    StructuringResult:
+      type: object
+      required: [structuredIncident, incidentResourceNeeds]
+      properties:
+        structuredIncident:
+          $ref: '#/components/schemas/StructuredIncident'
+        incidentResourceNeeds:
+          $ref: '#/components/schemas/IncidentResourceNeeds'
+
+    IncidentRef:
+      type: object
+      required: [incidentId]
+      properties:
+        incidentId:
+          type: string
+
+    StatusRequest:
+      type: object
+      required: [incidentId, requestedTeamIds, requestedAt]
+      properties:
+        incidentId:
+          type: string
+        requestedTeamIds:
+          type: array
+          items:
+            type: string
+        requestedAt:
+          type: string
+          format: date-time
+
+    TeamAvailability:
+      type: object
+      required: [teamId, name, available, zoneKey, capabilities, statusIncomplete, reportedAt]
+      properties:
+        teamId:
+          type: string
+        name:
+          type: string
+        available:
+          type: boolean
+        zoneKey:
+          type: string
+          nullable: true
+        capabilities:
+          type: array
+          items:
+            $ref: '#/components/schemas/Capability'
+        statusIncomplete:
+          type: boolean
+          description: True when the last response lacked availability, location or capability (SR.10); such a team must not be recommended.
+        reportedAt:
+          type: string
+          format: date-time
+          nullable: true
+          description: Time of the team's last status report; null if it has not reported for this incident.
+
+    CurrentResourceAvailability:
+      description: IO.13 Current Resource Availability - current availability, location and capability of rescue teams, passed to the recommendation function.
+      x-flow: IO.13
+      type: object
+      required: [incidentId, collectedAt, teams]
+      properties:
+        incidentId:
+          type: string
+        collectedAt:
+          type: string
+          format: date-time
+        teams:
+          type: array
+          items:
+            $ref: '#/components/schemas/TeamAvailability'
+
+    RecommendationInput:
+      type: object
+      required: [structuredIncident, currentResourceAvailability]
+      properties:
+        structuredIncident:
+          $ref: '#/components/schemas/StructuredIncident'
+        currentResourceAvailability:
+          $ref: '#/components/schemas/CurrentResourceAvailability'
+
+    DispatchRecommendation:
+      description: External IO.5 Dispatch Recommendation as presented to the Emergency Coordinator (summary; full presentation is defined by the public route).
+      type: object
+      required: [id, incidentId, teamId, teamName, rationale, alternatives, status]
+      properties:
+        id:
+          type: string
+        incidentId:
+          type: string
+        teamId:
+          type: string
+          nullable: true
+        teamName:
+          type: string
+          nullable: true
+        rationale:
+          type: array
+          items:
+            type: string
+        alternatives:
+          type: array
+          items:
+            type: object
+        status:
+          type: string
+          enum: [PRESENTED, APPROVED]
+
+    ProposedAssignment:
+      description: IO.14 Proposed Assignment - recommended resource assignment passed from the recommendation function to dispatch-order management, which issues the dispatch order after the Emergency Coordinator approves the assignment.
+      x-flow: IO.14
+      type: object
+      required: [recommendationId, incidentId, teamId, teamName, location, task, urgency]
+      properties:
+        recommendationId:
+          type: string
+        incidentId:
+          type: string
+        teamId:
+          type: string
+        teamName:
+          type: string
+        location:
+          type: string
+          nullable: true
+        task:
+          type: string
+          description: Non-empty task for the dispatch order (SR.8).
+        urgency:
+          type: string
+          enum: [High, Standard]
+
+    RecommendationResult:
+      type: object
+      required: [dispatchRecommendation, proposedAssignment]
+      properties:
+        dispatchRecommendation:
+          $ref: '#/components/schemas/DispatchRecommendation'
+        proposedAssignment:
+          nullable: true
+          allOf:
+            - $ref: '#/components/schemas/ProposedAssignment'
+
+    Accepted:
+      type: object
+      required: [recommendationId, held]
+      properties:
+        recommendationId:
+          type: string
+        held:
+          type: boolean
+
+    Error:
+      type: object
+      required: [error, rule]
+      properties:
+        error:
+          type: string
+        rule:
+          type: string
+          nullable: true
