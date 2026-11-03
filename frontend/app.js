@@ -13,10 +13,10 @@
 
   var A = window.RESCUTECH_ARCH, EL = A.EL;
   var ACTOR = {
-    cit: { name: 'Citizen', iface: 'X.1 · Interface 1 · phone', ab: 'X.1' },
-    sys: { name: 'RescuTech', iface: 'S.1 · system of interest', ab: 'S.1' },
-    coord: { name: 'Emergency Coordinator', iface: 'X.2 · Interface 3 · console', ab: 'X.2' },
-    team: { name: 'Rescue Team', iface: 'X.3 · Interface 4 · tablet', ab: 'X.3' }
+    cit: { name: 'Citizen', iface: '<span class="mdl">X.1 · Interface 1 · </span>phone', ab: 'X.1' },
+    sys: { name: 'RescuTech', iface: '<span class="mdl">S.1 · </span>system of interest', ab: 'S.1' },
+    coord: { name: 'Emergency Coordinator', iface: '<span class="mdl">X.2 · Interface 3 · </span>console', ab: 'X.2' },
+    team: { name: 'Rescue Team', iface: '<span class="mdl">X.3 · Interface 4 · </span>tablet', ab: 'X.3' }
   };
   var LOG_ACTOR = { 'Citizen': 'cit', 'RescuTech': 'sys', 'Coordinator': 'coord', 'Rescue Team': 'team' };
   var STEPS = [
@@ -37,7 +37,14 @@
 
   var $ = function (id) { return document.getElementById(id); };
   var client, run, cur, view, reqs, logCache = [], checkResults = null;
-  var archMode = 'l1', archSel = 'F.2.5', traceTab = 'sr', miniTab = 'link';
+  var archMode = 'l1', archSel = 'F.2.5', traceTab = 'sr', miniTab = 'link', modelOn = true;
+  try { modelOn = localStorage.getItem('rt-model-view') !== 'off'; } catch (e) { /* storage unavailable */ }
+  function applyModel() {
+    document.body.classList.toggle('model-off', !modelOn);
+    $('btn-model').setAttribute('aria-pressed', String(modelOn));
+    if (!modelOn && miniTab === 'link') miniTab = 'log';
+    if (modelOn && miniTab === 'log' && !logCache.length) miniTab = 'link';
+  }
 
   function esc(s) { return String(s == null ? '' : s).replace(/[&<>"]/g, function (c) { return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]; }); }
   function hm(d) { return d ? new Date(d).toTimeString().slice(0, 8) : ''; }
@@ -69,7 +76,7 @@
     var fid = s.key === 'order' ? 'F.2.5.2–3' : s.fn, asset = s.key === 'order' ? 'S.1.5.2–3' : EL[s.fn].asset;
     return '<button type="button" class="node ' + st + (last ? ' last' : '') + '" data-step="' + i + '" style="' + vars(s.actor) + '"' + (i > cur ? ' disabled' : '') + '>' +
       '<span class="dot">' + (run.done[i] && i !== view ? '✓' : i + 1) + '</span><span class="lbl">' + esc(s.title) + '</span>' +
-      '<span class="fn">' + fid + ' · ' + asset + '</span></button>';
+      '<span class="fn mdl">' + fid + ' · ' + asset + '</span></button>';
   }
   function renderLane() {
     $('lane').innerHTML = '<div class="solo">' + node(0) + '</div><div class="solo">' + node(1) + '</div><div class="solo">' + node(2) + '</div><div class="solo">' + node(3) + '</div>' +
@@ -104,7 +111,7 @@
         '<div class="meta">' + esc(ZONES[t.zoneKey].name) + dist + ' · ' + t.capabilities.map(function (c) { return CAP[c]; }).join(', ') + '</div>' + why + ctl + '</div>';
     }).join('');
     $('units-foot').innerHTML = ed ? '<b style="color:var(--c-team)">Your turn:</b> switch teams on or off, then send the replies.' :
-      'Status source: <code>resource-status-source/</code> <span class="tag stub">STUB</span>';
+      '<span class="mdl">Status source: <code>resource-status-source/</code> <span class="tag stub">STUB</span></span><span class="nomdl">Replies from the last status request.</span>';
   }
 
   // ---------------- map ----------------
@@ -187,13 +194,13 @@
       var inc = run.incident;
       return ['<p class="say">The free text becomes a structured incident. Anything the system cannot determine is <b>flagged, never guessed</b>.</p>' +
         '<p class="quote">“' + esc(run.report.description) + '”</p>' +
-        (done ? '<div><span class="cap">Structured incident <span class="tag stub">STUB</span></span>' + kv(inc) + '</div>' +
+        (done ? '<div><span class="cap">Structured incident <span class="tag stub mdl">STUB</span></span>' + kv(inc) + '</div>' +
           (inc.missing.length ? '<div class="note warn"><b>Flagged as missing</b>' + esc(inc.missing.join(', ')) + '</div>' : '<div class="note ok"><b>All fields determined</b>No guesses were needed.</div>') : ''),
         done ? NEXT() : acts(btn('Structure incident', 'structure'))];
     },
     status: function (done) {
       var teams = teamsNow(), n = teams.filter(function (t) { return t.available; }).length;
-      return ['<p class="say">RescuTech sends a status request to every team (UC.1.5). The replies update current availability (UC.1.7).</p>' +
+      return ['<p class="say">RescuTech sends a status request to every team<span class="mdl"> (UC.1.5)</span>. The replies update current availability<span class="mdl"> (UC.1.7)</span>.</p>' +
         '<div class="big-num"><b>' + n + '/' + teams.length + '</b><span class="hint">teams will reply “available”</span></div>' +
         (done ? '<div class="note ok"><b>All ' + run.teams.length + ' teams replied</b>Availability is up to date.</div>'
               : '<div class="note"><b>Try it</b>Switch a team off in the <span class="em">Rescue teams</span> list to change the recommendation.</div>'),
@@ -203,27 +210,27 @@
       var rec = run.rec;
       if (!done) return ['<p class="say">RescuTech matches the incident against availability, capability and distance, and explains its choice.</p>', acts(btn('Generate recommendation', 'recommend'))];
       return ['<p class="say">One recommended team, <b>with its reasons</b>. The coordinator decides.</p>' +
-        '<div class="reco"><span class="cap">Recommended team <span class="tag stub">STUB · rule-based</span></span><p class="nm">' + esc(rec.teamName || 'No suitable team') + '</p><ul>' +
+        '<div class="reco"><span class="cap">Recommended team <span class="tag stub mdl">STUB · rule-based</span></span><p class="nm">' + esc(rec.teamName || 'No suitable team') + '</p><ul>' +
         rec.rationale.map(function (r) { return '<li>' + esc(r) + '</li>'; }).join('') + '</ul></div>' +
         '<p class="hint" style="margin:0">Excluded teams show their reason in the teams list.</p>',
         rec.teamId ? NEXT('Go to approval') : '<div class="note warn"><b>No match</b>Restart and switch more teams on.</div>'];
     },
     approve: function (done) {
       var rec = run.rec;
-      return ['<p class="say"><b>S.1.5.1 Dispatch Authorization Module</b> compiles an order only for an assignment the coordinator approved. Try sending without approval first.</p>' +
+      return ['<p class="say">' + '<b class="mdl">S.1.5.1 Dispatch Authorization Module</b><b class="nomdl">RescuTech</b> compiles an order only for an assignment the coordinator approved. Try sending without approval first.</p>' +
         '<div class="note"><b>' + esc(rec.teamName) + ' → ' + esc(run.incident.location) + '</b>' + esc(run.incident.assistanceNeeded || '') + '</div>' +
-        (run.guard ? '<div class="note bad"><b>409 · blocked (SR.6, CRD 2.1.1)</b>' + esc(run.guard) + '</div>' : '') +
+        (run.guard ? '<div class="note bad"><b>409 · blocked<span class="mdl"> (SR.6, CRD 2.1.1)</span></b>' + esc(run.guard) + '</div>' : '') +
         (done ? '<div class="note ok"><b>Approved · ' + run.approval.id + '</b>' + esc(rec.teamName) + ' approved at ' + hm(run.approval.at) + '.</div>' : ''),
         done ? NEXT() : acts(btn('Send without approval', 'unapproved', 'danger'), btn('Approve ' + esc(rec.teamName.replace('Rescue Team ', '')), 'approve'))];
     },
     order: function (done) {
       var o = run.order;
-      if (!o) return ['<p class="say"><b>S.1.5.2 Order Transmission Module</b> sends the approved order to the assigned team and records it.</p>', acts(btn('Issue dispatch order', 'issue'))];
-      return ['<p class="say"><b>S.1.5.3 Acknowledgment Verification Module</b> accepts the receipt only from the assigned team.</p>' +
+      if (!o) return ['<p class="say">' + '<b class="mdl">S.1.5.2 Order Transmission Module</b><b class="nomdl">RescuTech</b> sends the approved order to the assigned team and records it.</p>', acts(btn('Issue dispatch order', 'issue'))];
+      return ['<p class="say">' + '<b class="mdl">S.1.5.3 Acknowledgment Verification Module</b><b class="nomdl">RescuTech</b> accepts the receipt only from the assigned team.</p>' +
         '<div class="order"><div class="top"><span>DISPATCH ORDER ' + o.id + '</span><span>' + esc(o.urgency).toUpperCase() + '</span></div><div class="bd">' +
         '<span class="cap">Go to</span><p class="loc">' + esc(o.location) + '</p><span class="cap">Task</span><p class="task">' + esc(o.task) + '</p>' +
         '<dl class="kv"><dt>Team</dt><dd>' + esc(o.teamName) + '</dd><dt>Approval</dt><dd>' + o.approvalId + ' · sent ' + hm(o.issuedAt) + '</dd></dl></div></div>' +
-        (run.wrongAck ? '<div class="note bad"><b>409 · rejected (CRD 2.4.2)</b>' + esc(run.wrongAck) + '</div>' : '') +
+        (run.wrongAck ? '<div class="note bad"><b>409 · rejected<span class="mdl"> (CRD 2.4.2)</span></b>' + esc(run.wrongAck) + '</div>' : '') +
         (done ? '<div class="note ok"><b>Receipt confirmed</b>' + esc(o.teamName) + ' acknowledged at ' + hm(run.ackd.acknowledgedAt) + '.</div>' : ''),
         done ? NEXT('Show status') : acts(btn('Ack as another team', 'wrongack', 'danger'), btn('Acknowledge receipt', 'ack'))];
     },
@@ -233,7 +240,7 @@
       var ops = window.RESCUTECH_TRACE.filter(function (t) { return t.lane !== 'delivery'; });
       var n = ops.filter(function (t) { return used[t.sr]; }).length;
       function tl(on, what, ref, when) { return '<li class="' + (on ? 'on' : '') + '"><span class="pt"></span><div><b>' + what + '</b><small>' + esc(ref) + '</small></div><span class="when">' + hm(when) + '</span></li>'; }
-      return ['<p class="say"><b>S.1.5.4 Status Reporting Module</b>: status comes only from recorded events, so “acknowledged” never appears early.</p>' +
+      return ['<p class="say">' + '<b class="mdl">S.1.5.4 Status Reporting Module</b><b class="nomdl">RescuTech</b>: status comes only from recorded events, so “acknowledged” never appears early.</p>' +
         '<div><span class="pill ' + st.code + '">' + (st.code === 'ACKNOWLEDGED' ? 'Acknowledged' : 'Awaiting acknowledgment') + '</span></div>' +
         '<ol class="tl">' + tl(true, 'Report registered', run.report.id, run.report.registeredAt) + tl(true, 'Assignment approved', run.approval.id, run.approval.at) +
         tl(true, 'Order issued', o.id + ' → ' + o.teamName, o.issuedAt) + tl(!!o.acknowledgedAt, 'Receipt acknowledged', o.teamName, o.acknowledgedAt) + '</ol>' +
@@ -270,7 +277,7 @@
     return '<ul class="feed">' + logCache.slice().reverse().map(function (e) {
       var a = LOG_ACTOR[e.actor] || 'sys', blk = e.kind === 'block';
       return '<li class="' + (blk ? 'block' : '') + '"><span class="t">' + hm(e.time) + '</span><span class="d" style="background:var(--c-' + a + ')"></span>' +
-        '<div><span class="uc">' + A.ucModel(e.uc) + '</span><span class="' + (blk ? 'x' : '') + '">' + esc(e.text) + '</span></div></li>';
+        '<div><span class="uc mdl">' + A.ucModel(e.uc) + '</span><span class="' + (blk ? 'x' : '') + '">' + esc(e.text) + '</span></div></li>';
     }).join('') + '</ul>';
   }
   function apiHtml() {
@@ -505,7 +512,7 @@
   }
 
   function restart() {
-    run = { done: {} }; cur = 0; view = 0; reqs = []; miniTab = 'link';
+    run = { done: {} }; cur = 0; view = 0; reqs = []; miniTab = modelOn ? 'link' : 'log';
     return api('POST', '/api/reset').then(function () { reqs = []; showView('demo'); return render(); });
   }
 
@@ -527,6 +534,12 @@
     run.avail = run.avail || {}; run.avail[id] = e.target.checked; renderUnits(); renderMap(); renderStep();
   });
   $('btn-restart').addEventListener('click', function () { restart(); });
+  $('btn-model').addEventListener('click', function () {
+    modelOn = !modelOn; miniTab = modelOn ? 'link' : 'log';
+    try { localStorage.setItem('rt-model-view', modelOn ? 'on' : 'off'); } catch (e) { /* storage unavailable */ }
+    applyModel(); if (run) renderTabs();
+  });
+  applyModel();
   $('btn-checks').addEventListener('click', function () { checkResults = window.RescuTechAcceptance.runAll(); renderTrace(); });
 
   client = window.RescuTechApiClient.create(function (r) { reqs.push(r); });

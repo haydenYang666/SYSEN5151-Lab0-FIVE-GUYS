@@ -389,3 +389,18 @@ main.ops-main { max-width: none; padding: 14px 18px 18px; }
 .legend span { display: flex; align-items: center; gap: 6px; white-space: nowrap; }
 .legend i { width: 10px; height: 10px; border-radius: 50%; display: inline-block; }
 .step-card { max-height: 66%; }
+
+/* Model view toggle: off = clean operator console; on = Innoslate IDs (F.2.x, S.1.x, UC, SR/CRD, STUB) */
+.mtoggle { display: inline-flex; align-items: center; gap: 8px; border: 1px solid rgba(255,255,255,.25); background: transparent; color: #fff;
+  padding: 6px 12px 6px 8px; border-radius: 999px; cursor: pointer; font-size: 13px; font-weight: 600; }
+.mtoggle .sw { width: 30px; height: 18px; border-radius: 999px; background: rgba(255,255,255,.25); position: relative; transition: background .15s; }
+.mtoggle .sw::after { content: ""; position: absolute; left: 2px; top: 2px; width: 14px; height: 14px; border-radius: 50%; background: #fff; transition: left .15s; }
+.mtoggle[aria-pressed="true"] { border-color: var(--c-sys); }
+.mtoggle[aria-pressed="true"] .sw { background: var(--c-sys); }
+.mtoggle[aria-pressed="true"] .sw::after { left: 14px; }
+.nomdl { display: none; }
+body.model-off .mdl, body.model-off [data-mt="link"] { display: none !important; }
+body.model-off .nomdl { display: inline; }
+body.model-off .lane .grp::before { display: none; }
+body.model-off .lane .grp, body.model-off .lane .solo { padding-top: 0; }
+body.model-off .node .dot { grid-row: auto; }

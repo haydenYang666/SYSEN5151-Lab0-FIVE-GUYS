@@ -39,6 +39,8 @@ UC step numbers in the UI follow the current Innoslate UC.1 Action Diagram (UC.1
 Resource Availability). Log entries in the service code still use the earlier 15-step numbering; `frontend/model-architecture.js`
 converts them.
 
+**Model view** (top-bar switch): off shows a clean operator console; on adds the Innoslate IDs (F.2.x, S.1.x, UC, SR/CRD, STUB tags) and the Model link tab. The choice is remembered in the browser.
+
 Live demo script (≈3 minutes, F.2.5 focus): Send report → Structure → Request status (switch a team off to change the outcome) →
 Generate recommendation → **Send order without approval (409, S.1.5.1 / SR.6)** → Approve → Issue order (S.1.5.2) →
 **Acknowledge as another team (rejected, S.1.5.3 / CRD 2.4.2)** → Acknowledge → Status (S.1.5.4) → Architecture → IDEF0 F.2.5.
