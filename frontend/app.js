@@ -219,7 +219,7 @@
       var rec = run.rec;
       return ['<p class="say">' + '<b class="mdl">S.1.5.1 Dispatch Authorization Module</b><b class="nomdl">RescuTech</b> compiles an order only for an assignment the coordinator approved. Try sending without approval first.</p>' +
         '<div class="note"><b>' + esc(rec.teamName) + ' → ' + esc(run.incident.location) + '</b>' + esc(run.incident.assistanceNeeded || '') + '</div>' +
-        (run.guard ? '<div class="note bad"><b>409 · blocked<span class="mdl"> (SR.6, CRD 2.1.1)</span></b>' + esc(run.guard) + '</div>' : '') +
+        (run.guard ? '<div class="note bad"><b>409 · blocked<span class="mdl"> (SR.6, CRD 2.1.1)</span></b>' + esc(run.guard).replace(/\s*\((SR\.\d+)\)/g, '<span class="mdl"> ($1)</span>') + '</div>' : '') +
         (done ? '<div class="note ok"><b>Approved · ' + run.approval.id + '</b>' + esc(rec.teamName) + ' approved at ' + hm(run.approval.at) + '.</div>' : ''),
         done ? NEXT() : acts(btn('Send without approval', 'unapproved', 'danger'), btn('Approve ' + esc(rec.teamName.replace('Rescue Team ', '')), 'approve'))];
     },
