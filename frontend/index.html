@@ -26,41 +26,45 @@
   </div>
 </header>
 
-<main>
-  <!-- F.2.1–F.2.5 as the product runs them -->
-  <div class="fstrip" id="fstrip" aria-label="First-level functions of F.2 and their mechanisms"></div>
-
-  <!-- OPERATE -->
+<main id="main" class="ops-main">
+  <!-- OPERATE: guided lane, teams | map | action + log -->
   <section id="view-demo" class="view" role="tabpanel" aria-labelledby="tab-demo">
-    <div class="op-grid">
-      <article class="card map-card">
-        <div class="metrics" id="metrics"></div>
-        <div class="map-wrap">
-          <svg id="map" viewBox="0 0 620 470" role="img" aria-label="Simulated incident map of Tompkins County"></svg>
-          <div class="crumb" id="crumb"></div>
-          <div class="legend">
-            <span><i style="background:var(--accent)"></i>Incident</span>
-            <span><i style="background:var(--c-team)"></i>Team available</span>
-            <span><i style="background:#a3adbb"></i>Team unavailable</span>
-            <span><i style="background:#fff;box-shadow:0 0 0 2.5px var(--gold) inset"></i>Recommended</span>
-          </div>
-        </div>
-        <div class="sim-note">Simulated scenario on a km grid. Team names, distances and areas are fictional; no real agency is connected.</div>
-      </article>
-
-      <aside class="side">
-        <article class="card step-card" id="step-card">
-          <div class="step-top" id="step-top"></div>
-          <div class="dots" id="dots" aria-label="Steps"></div>
-          <div class="step-body" id="stage" aria-live="polite"></div>
-        </article>
-
-        <article class="card">
-          <div class="card-h"><h2>Model link for this step</h2><span class="hint">Innoslate project 584</span></div>
-          <div class="link" id="link"></div>
-          <details class="log"><summary id="log-sum">API requests (0)</summary><ol class="reqs" id="reqs"></ol></details>
-        </article>
+    <nav class="panel lane" id="lane" aria-label="UC.1 workflow"></nav>
+    <div class="ops-grid">
+      <aside class="panel units" id="units-panel">
+        <div class="panel-h"><h2>Rescue teams · X.3</h2><span class="hint" id="units-sum"></span></div>
+        <div class="units-list" id="units"></div>
+        <div class="units-foot" id="units-foot"></div>
       </aside>
+
+      <section class="panel map-panel" aria-label="Incident map">
+        <svg id="map" viewBox="24 18 590 440" preserveAspectRatio="xMidYMid meet" role="img" aria-label="Simulated incident map of Tompkins County"></svg>
+        <div class="chips" id="metrics"></div>
+        <div class="legend">
+          <span><i style="background:var(--accent)"></i>Incident</span>
+          <span><i style="background:var(--c-team)"></i>Available</span>
+          <span><i style="background:#a3adbb"></i>Unavailable</span>
+          <span><i style="background:#fff;box-shadow:0 0 0 2.5px var(--gold) inset"></i>Recommended</span>
+        </div>
+        <span class="sim">Simulated km grid · fictional teams</span>
+        <div class="toasts" id="toasts" aria-live="polite"></div>
+      </section>
+
+      <div class="col">
+        <article class="panel step-card" id="step-card">
+          <div class="step-top" id="step-top"></div>
+          <div class="step-body" id="stage"></div>
+          <div class="step-foot" id="foot"></div>
+        </article>
+        <article class="panel tabs-card">
+          <div class="mtabs" role="tablist" id="mtabs">
+            <button type="button" role="tab" data-mt="link" aria-selected="true">Model link</button>
+            <button type="button" role="tab" data-mt="log" aria-selected="false">Event log<span class="n" id="n-log">0</span></button>
+            <button type="button" role="tab" data-mt="api" aria-selected="false">API<span class="n" id="n-api">0</span></button>
+          </div>
+          <div class="tab-body" id="tab-body"></div>
+        </article>
+      </div>
     </div>
   </section>
 

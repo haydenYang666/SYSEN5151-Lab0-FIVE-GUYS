@@ -31,7 +31,7 @@ The front end has three views:
 
 | View | What it shows | Milestone row |
 |------|---------------|---------------|
-| **Operate** | UC.1 in seven steps on a simulated Tompkins County map, one primary action per step. The strip at the top shows which first-level function (F.2.1–F.2.5) and which asset (S.1.1–S.1.5) is running; F.2.5 splits into F.2.5.1–F.2.5.4. A model-link card gives the function, performing asset, UC steps, SR/CRD requirements and the code for the current step | Walking Skeleton, Model-to-Product Linkage |
+| **Operate** | Dispatch-console layout. A guided lane shows UC.1 in seven steps, each labelled with its function (F.2.1–F.2.5.4) and performing asset (S.1.x); the three F.2.5 steps are grouped under S.1.5. Rescue teams on the left, a simulated Tompkins County map in the centre, and on the right the current action (one primary button) above tabs for the model link (function, asset, UC steps, SR/CRD, code), the event log and the API requests | Walking Skeleton, Model-to-Product Linkage |
 | **Architecture** | Level-1 IDEF0 of F.2 with mechanisms S.1.1–S.1.5, level-2 IDEF0 of F.2.5 with S.1.5.1–S.1.5.4, and the S.1 asset hierarchy. Each element opens its code, requirements and a button to see it run | Form: physical architecture |
 | **Traceability** | N → SR → UC step → API → code → check, plus the S.1.5 CRD with its status in the prototype; the checks run in the browser | Requirements Baseline |
 
