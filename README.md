@@ -27,17 +27,23 @@ npm run generate:stubs   # regenerate contracts/generated/ after changing contra
 
 You can also open `frontend/index.html` directly from disk; it then runs the same route table in the page.
 
-The demo has three views:
+The front end has three views:
 
-| View | What it shows | Milestone 1 row |
-|------|---------------|-----------------|
-| **Demo** | UC.1 in seven steps, each on the actor's own device, with a live sequence diagram, the model link for the step, and every API request | Walking Skeleton |
-| **System context** | S.1, its boundary, X.1–X.3, the interfaces, and which internal parts are real or stubbed | Mission / SoI / Boundary |
-| **Traceability** | N → SR → UC step → API → code → acceptance check, with a button that runs the checks in the browser | Requirements Baseline, Model-to-Product Linkage |
+| View | What it shows | Milestone row |
+|------|---------------|---------------|
+| **Operate** | Dispatch-console layout. A guided lane shows UC.1 in seven steps, each labelled with its function (F.2.1–F.2.5.4) and performing asset (S.1.x); the three F.2.5 steps are grouped under S.1.5. Rescue teams on the left, a simulated Tompkins County map in the centre, and on the right the current action (one primary button) above tabs for the model link (function, asset, UC steps, SR/CRD, code), the event log and the API requests | Walking Skeleton, Model-to-Product Linkage |
+| **Architecture** | Level-1 IDEF0 of F.2 with mechanisms S.1.1–S.1.5, level-2 IDEF0 of F.2.5 with S.1.5.1–S.1.5.4, and the S.1 asset hierarchy. Each element opens its code, requirements and a button to see it run | Form: physical architecture |
+| **Traceability** | N → SR → UC step → API → code → check, plus the S.1.5 CRD with its status in the prototype; the checks run in the browser | Requirements Baseline |
 
-Live demo script (≈2 minutes): Send report → Continue → Request status → Send status responses →
-**Send order without approval (409, blocked by SR.6)** → Approve → Send dispatch order → Acknowledge →
-Open traceability.
+UC step numbers in the UI follow the current Innoslate UC.1 Action Diagram (UC.1.1–UC.1.16, with UC.1.7 Update
+Resource Availability). Log entries in the service code still use the earlier 15-step numbering; `frontend/model-architecture.js`
+converts them.
+
+**Model view** (top-bar switch): off shows a clean operator console; on adds the Innoslate IDs (F.2.x, S.1.x, UC, SR/CRD, STUB tags) and the Model link tab. The choice is remembered in the browser.
+
+Live demo script (≈3 minutes, F.2.5 focus): Send report → Structure → Request status (switch a team off to change the outcome) →
+Generate recommendation → **Send order without approval (409, S.1.5.1 / SR.6)** → Approve → Issue order (S.1.5.2) →
+**Acknowledge as another team (rejected, S.1.5.3 / CRD 2.4.2)** → Acknowledge → Status (S.1.5.4) → Architecture → IDEF0 F.2.5.
 
 ## 3. Repository layout — one directory per model element
 
