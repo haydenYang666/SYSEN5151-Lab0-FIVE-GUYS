@@ -31,6 +31,7 @@
 
     var ctx = {
       now: now,
+      onContractCall: opts.onContractCall,   // F.2.5 reports its second-level internal flows (IO.15–IO.17) here too
       nextId: function (prefix) { seq[prefix] += 1; return prefix + '-' + String(seq[prefix]).padStart(4, '0'); },
       log: function (uc, actor, text, refs, kind) {
         var entry = { time: now(), uc: uc, actor: actor, text: text, refs: refs || [], kind: kind || 'ok' };

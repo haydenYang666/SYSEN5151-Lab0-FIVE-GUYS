@@ -7,6 +7,10 @@
 #   IO.12 Structured Incident             F.2.2 -> F.2.4
 #   IO.13 Current Resource Availability   F.2.3 -> F.2.4
 #   IO.14 Proposed Assignment             F.2.4 -> F.2.5
+# Added 2026-11-08 from the second-level IDEF0 of F.2.5 Manage Dispatch Orders (the function decomposed for PMC2):
+#   IO.15 Authorized Dispatch Order       F.2.5.1 -> F.2.5.2   (conduit C.9)
+#   IO.16 Issued Order Record             F.2.5.2 -> F.2.5.3   (conduit C.10)
+#   IO.17 Verified Acknowledgment         F.2.5.3 -> F.2.5.4   (conduit C.11)
 # Each internal flow is the request body of an operation on its receiving function, or the response of an
 # operation on its sending function, exactly once each way. External flows (IO.1-IO.9) are served by the
 # public REST routes in rescutech-orchestrator/routes.js and are not part of this contract.
@@ -19,8 +23,8 @@
 openapi: 3.0.3
 info:
   title: RescuTech Internal Interface Contract
-  version: 1.0.0
-  description: Interfaces between the first-level functions F.2.1-F.2.5 of S.1 RescuTech Disaster Response Agent Orchestrator.
+  version: 1.1.0
+  description: Interfaces between the first-level functions F.2.1-F.2.5 of S.1 RescuTech Disaster Response Agent Orchestrator, and between the second-level functions F.2.5.1-F.2.5.4 of F.2.5.
 
 paths:
   /internal/f2-2/structure-incident:
@@ -155,6 +159,122 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/Error'
+
+  /internal/f2-5-1/authorized-orders:
+    post:
+      operationId: compileAuthorizedDispatchOrder
+      summary: Inside F.2.5 - F.2.5.1 binds the held IO.14 Proposed Assignment to the control IO.6 Dispatch Approval and returns IO.15 Authorized Dispatch Order
+      x-receiver: F.2.5.1
+      x-module: f2-5-1-compile-authorized-dispatch-order
+      x-flows-in: []
+      x-flows-out: [IO.15]
+      x-requirements: [1.1.2, 1.4.1, 2.1.1]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/AuthorizationRequest'
+      responses:
+        '201':
+          description: The approval matches the proposed assignment; IO.15 is produced.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AuthorizedDispatchOrder'
+        '409':
+          description: No matching approval (control IO.6) for this assignment; no IO.15 is produced (SR.6, CRD 2.1.1).
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+  /internal/f2-5-2/dispatch-orders:
+    post:
+      operationId: issueDispatchOrder
+      summary: F.2.5.1 -> F.2.5.2 delivers IO.15 Authorized Dispatch Order; F.2.5.2 sends external IO.7 and returns IO.16 Issued Order Record
+      x-receiver: F.2.5.2
+      x-module: f2-5-2-issue-dispatch-order
+      x-flows-in: [IO.15]
+      x-flows-out: [IO.16]
+      x-requirements: [1.2.1, 1.4.2]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/AuthorizedDispatchOrder'
+      responses:
+        '201':
+          description: Dispatch order issued to the assigned team; the issued-order record is kept for acknowledgment checking.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/IssueResult'
+        '409':
+          description: An order was already issued for this authorization (CRD 1.4.2, one order per authorization).
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+  /internal/f2-5-3/acknowledgments:
+    post:
+      operationId: verifyDispatchAcknowledgment
+      summary: F.2.5.2 -> F.2.5.3 delivers IO.16 Issued Order Record with the external IO.8 Dispatch Acknowledgment; F.2.5.3 returns IO.17 Verified Acknowledgment
+      x-receiver: F.2.5.3
+      x-module: f2-5-3-verify-dispatch-acknowledgment
+      x-flows-in: [IO.16]
+      x-flows-out: [IO.17]
+      x-requirements: [1.1.3, 1.4.3, 2.4.1, 2.4.2]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/AcknowledgmentCheck'
+      responses:
+        '201':
+          description: Acknowledgment matches the issued order and is recorded against it.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/VerifiedAcknowledgment'
+        '404':
+          description: No issued order with this identifier.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '409':
+          description: The sender is not the team assigned to this order; rejected (CRD 2.4.2).
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+  /internal/f2-5-4/status:
+    post:
+      operationId: reportDispatchStatus
+      summary: F.2.5.3 -> F.2.5.4 delivers IO.17 Verified Acknowledgment (null until the team acknowledges); F.2.5.4 returns external IO.9 Dispatch Status
+      x-receiver: F.2.5.4
+      x-module: f2-5-4-report-dispatch-status
+      x-flows-in: [IO.17]
+      x-flows-out: []
+      x-requirements: [1.2.2, 1.4.4]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/StatusQuery'
+      responses:
+        '200':
+          description: Dispatch status derived only from recorded events (SR.7).
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DispatchStatus'
 
 components:
   schemas:
@@ -409,3 +529,160 @@ components:
         rule:
           type: string
           nullable: true
+
+    AuthorizationRequest:
+      description: Asks F.2.5.1 to compile the authorized order for one held proposed assignment.
+      type: object
+      required: [recommendationId]
+      properties:
+        recommendationId:
+          type: string
+
+    AuthorizedDispatchOrder:
+      description: IO.15 Authorized Dispatch Order - a proposed assignment bound to the Emergency Coordinator's matching approval, passed from F.2.5.1 to F.2.5.2 over C.9.
+      x-flow: IO.15
+      type: object
+      required: [recommendationId, incidentId, teamId, teamName, location, task, urgency, approvalId, approvedBy, approvedAt]
+      properties:
+        recommendationId:
+          type: string
+        incidentId:
+          type: string
+        teamId:
+          type: string
+        teamName:
+          type: string
+        location:
+          type: string
+          nullable: true
+        task:
+          type: string
+        urgency:
+          type: string
+          enum: [High, Standard]
+        approvalId:
+          type: string
+        approvedBy:
+          type: string
+        approvedAt:
+          type: string
+          format: date-time
+
+    DispatchOrder:
+      description: External IO.7 Dispatch Order sent to the assigned Rescue Team (location and task, SR.8).
+      type: object
+      required: [orderId, incidentId, teamId, teamName, location, task, urgency, approvalId, issuedAt]
+      properties:
+        orderId:
+          type: string
+        incidentId:
+          type: string
+        teamId:
+          type: string
+        teamName:
+          type: string
+        location:
+          type: string
+          nullable: true
+        task:
+          type: string
+        urgency:
+          type: string
+          enum: [High, Standard]
+        approvalId:
+          type: string
+        issuedAt:
+          type: string
+          format: date-time
+
+    IssuedOrderRecord:
+      description: IO.16 Issued Order Record - what was sent to whom, passed from F.2.5.2 to F.2.5.3 over C.10 as the reference for acknowledgment checking.
+      x-flow: IO.16
+      type: object
+      required: [orderId, recommendationId, incidentId, teamId, teamName, approvalId, issuedAt]
+      properties:
+        orderId:
+          type: string
+        recommendationId:
+          type: string
+        incidentId:
+          type: string
+        teamId:
+          type: string
+        teamName:
+          type: string
+        approvalId:
+          type: string
+        issuedAt:
+          type: string
+          format: date-time
+
+    IssueResult:
+      type: object
+      required: [dispatchOrder, issuedOrderRecord]
+      properties:
+        dispatchOrder:
+          $ref: '#/components/schemas/DispatchOrder'
+        issuedOrderRecord:
+          $ref: '#/components/schemas/IssuedOrderRecord'
+
+    DispatchAcknowledgment:
+      description: External IO.8 Dispatch Acknowledgment from a Rescue Team.
+      type: object
+      required: [orderId, teamId]
+      properties:
+        orderId:
+          type: string
+        teamId:
+          type: string
+
+    AcknowledgmentCheck:
+      type: object
+      required: [dispatchAcknowledgment, issuedOrderRecord]
+      properties:
+        dispatchAcknowledgment:
+          $ref: '#/components/schemas/DispatchAcknowledgment'
+        issuedOrderRecord:
+          nullable: true
+          allOf:
+            - $ref: '#/components/schemas/IssuedOrderRecord'
+
+    VerifiedAcknowledgment:
+      description: IO.17 Verified Acknowledgment - an acknowledgment matched to its issued order and assigned team, passed from F.2.5.3 to F.2.5.4 over C.11.
+      x-flow: IO.17
+      type: object
+      required: [orderId, teamId, teamName, acknowledgedAt]
+      properties:
+        orderId:
+          type: string
+        teamId:
+          type: string
+        teamName:
+          type: string
+        acknowledgedAt:
+          type: string
+          format: date-time
+
+    StatusQuery:
+      type: object
+      required: [orderId, verifiedAcknowledgment]
+      properties:
+        orderId:
+          type: string
+        verifiedAcknowledgment:
+          nullable: true
+          allOf:
+            - $ref: '#/components/schemas/VerifiedAcknowledgment'
+
+    DispatchStatus:
+      description: External IO.9 Dispatch Status shown to the Emergency Coordinator.
+      type: object
+      required: [orderId, code, label]
+      properties:
+        orderId:
+          type: string
+        code:
+          type: string
+          enum: [AWAITING_ACK, ACKNOWLEDGED]
+        label:
+          type: string
