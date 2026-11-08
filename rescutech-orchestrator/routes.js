@@ -41,23 +41,23 @@
       ['PUT', '/api/incidents/:id/team-status/:teamId', ['UC.1.6'], function (p, b) {
         return { status: 200, body: wf.provideResourceStatus(p.id, p.teamId, b || {}) };
       }],
-      ['POST', '/api/incidents/:id/recommendation', ['UC.1.7', 'UC.1.8', 'UC.1.9'], function (p) {
+      ['POST', '/api/incidents/:id/recommendation', ['UC.1.7', 'UC.1.8', 'UC.1.9', 'UC.1.10'], function (p) {
         return guard(function () {
           var rec = wf.presentDispatchRecommendation(p.id);
           wf.reviewDispatchRecommendation(rec.id);
           return { status: 201, body: rec };
         });
       }],
-      ['POST', '/api/recommendations/:id/approval', ['UC.1.10'], function (p, b) {
+      ['POST', '/api/recommendations/:id/approval', ['UC.1.11'], function (p, b) {
         return guard(function () { return { status: 201, body: wf.approveResourceAssignment(p.id, (b && b.by) || 'Emergency Coordinator') }; });
       }],
-      ['POST', '/api/recommendations/:id/dispatch-order', ['UC.1.11'], function (p) {
+      ['POST', '/api/recommendations/:id/dispatch-order', ['UC.1.12'], function (p) {
         return guard(function () { return { status: 201, body: wf.issueDispatchOrder(p.id) }; });
       }],
-      ['POST', '/api/dispatch-orders/:id/acknowledgment', ['UC.1.12', 'UC.1.13'], function (p, b) {
+      ['POST', '/api/dispatch-orders/:id/acknowledgment', ['UC.1.13', 'UC.1.14'], function (p, b) {
         return guard(function () { return { status: 200, body: wf.acknowledgeDispatchOrder(p.id, b && b.teamId) }; });
       }],
-      ['GET', '/api/dispatch-orders/:id/status', ['UC.1.14', 'UC.1.15'], function (p) {
+      ['GET', '/api/dispatch-orders/:id/status', ['UC.1.15', 'UC.1.16'], function (p) {
         return { status: 200, body: wf.reviewDispatchStatus(p.id) };
       }]
     ];

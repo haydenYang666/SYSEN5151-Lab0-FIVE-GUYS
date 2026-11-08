@@ -1,0 +1,23 @@
+name: tests
+on: [push, pull_request]
+jobs:
+  tests:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Need-linked acceptance checks (SR.12)
+        run: node tests/acceptance.spec.js
+      - name: Internal interface contract checks (contracts/api-v1.yaml, Lab 7)
+        run: node tests/contract.spec.js
+      - name: Functional requirement checks for F.2.5, named by requirement ID (Node)
+        run: node tests/functional-requirements.spec.js
+      - name: Functional requirement tests, one pytest test per requirement ID
+        run: |
+          pip install pytest
+          pytest tests/test_functional_requirements.py -v

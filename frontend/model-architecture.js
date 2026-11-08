@@ -2,7 +2,7 @@
  * Physical architecture (Form) from Innoslate project 584, as used by the Architecture view and the
  * function strip. Function -> performing asset is one-to-one at both levels (F.2.x -> S.1.x, F.2.5.x -> S.1.5.x).
  * UC numbers follow the current Innoslate UC.1 Action Diagram (UC.1.1–UC.1.16, with UC.1.7 Update Resource
- * Availability). The service code still logs the earlier 15-step numbering; ucModel() converts it.
+ * Availability), the same numbering the service code logs.
  */
 (function (root) {
   'use strict';
@@ -34,24 +34,24 @@
       inputs: 'IO.14 Proposed Assignment · IO.8 Dispatch Acknowledgment', control: 'IO.6 Dispatch Approval',
       outputs: 'IO.7 Dispatch Order · IO.9 Dispatch Status',
       uc: 'UC.1.11–UC.1.16', srs: ['SR.6', 'SR.7', 'SR.8', 'SR.9'],
-      code: F25, fns: 'four second-level functions, see F.2.5.1–F.2.5.4', api: 'approval, dispatch-order, acknowledgment, status routes' },
+      code: F25, fns: 'carries IO.15–IO.17 between the four second-level modules f2-5-1 … f2-5-4', api: 'approval, dispatch-order, acknowledgment, status routes' },
     'F.2.5.1': { kind: 'Function', name: 'Compile Authorized Dispatch Order', asset: 'S.1.5.1', step: 4,
       inputs: 'IO.14 Proposed Assignment', control: 'IO.6 Dispatch Approval', outputs: 'IO.15 Authorized Dispatch Order',
       uc: 'UC.1.11', srs: ['SR.6'], crd: ['1.1.1', '1.1.2', '1.3.1', '1.3.2', '1.4.1', '2.1.1', '2.4.3'],
-      code: F25, fns: 'acceptProposedAssignment(), approveResourceAssignment(), approval guard in issueDispatchOrder()',
+      code: 'functions/f2-5-1-compile-authorized-dispatch-order.js', fns: 'compile(proposedAssignment I:IO.14, dispatchApproval C:IO.6) → IO.15 · contract compileAuthorizedDispatchOrder',
       api: 'POST /api/recommendations/:id/approval' },
     'F.2.5.2': { kind: 'Function', name: 'Issue Dispatch Order', asset: 'S.1.5.2', step: 5,
       inputs: 'IO.15 Authorized Dispatch Order', outputs: 'IO.7 Dispatch Order · IO.16 Issued Order Record',
       uc: 'UC.1.12', srs: ['SR.6', 'SR.8'], crd: ['1.2.1', '1.3.3', '1.4.2', '2.3.1'],
-      code: F25, fns: 'issueDispatchOrder()', api: 'POST /api/recommendations/:id/dispatch-order' },
+      code: 'functions/f2-5-2-issue-dispatch-order.js', fns: 'issue(authorizedDispatchOrder I:IO.15) → IO.7, IO.16 · contract issueDispatchOrder', api: 'POST /api/recommendations/:id/dispatch-order' },
     'F.2.5.3': { kind: 'Function', name: 'Verify Dispatch Acknowledgment', asset: 'S.1.5.3', step: 5,
       inputs: 'IO.8 Dispatch Acknowledgment · IO.16 Issued Order Record', outputs: 'IO.17 Verified Acknowledgment',
       uc: 'UC.1.13–UC.1.14', srs: ['SR.9'], crd: ['1.1.3', '1.3.3', '1.4.3', '2.2.2', '2.4.1', '2.4.2'],
-      code: F25, fns: 'acknowledgeDispatchOrder() — rejects a team that is not the assigned one', api: 'POST /api/dispatch-orders/:id/acknowledgment' },
+      code: 'functions/f2-5-3-verify-dispatch-acknowledgment.js', fns: 'verify(dispatchAcknowledgment I:IO.8, issuedOrderRecord I:IO.16) → IO.17 · contract verifyDispatchAcknowledgment', api: 'POST /api/dispatch-orders/:id/acknowledgment' },
     'F.2.5.4': { kind: 'Function', name: 'Report Dispatch Status', asset: 'S.1.5.4', step: 6,
       inputs: 'IO.17 Verified Acknowledgment', outputs: 'IO.9 Dispatch Status',
       uc: 'UC.1.15–UC.1.16', srs: ['SR.7'], crd: ['1.2.2', '1.3.2', '1.4.4'],
-      code: F25, fns: 'presentDispatchStatus()', api: 'GET /api/dispatch-orders/:id/status' },
+      code: 'functions/f2-5-4-report-dispatch-status.js', fns: 'report(orderId, verifiedAcknowledgment I:IO.17) → IO.9 · contract reportDispatchStatus', api: 'GET /api/dispatch-orders/:id/status' },
 
     'S.1': { kind: 'Asset · system', name: 'RescuTech Disaster Response Agent Orchestrator', fn: 'F.2',
       desc: 'System of interest. Exchanges IO.1–IO.9 with X.1 Citizen (C.1), X.2 Emergency Coordinator (C.2) and X.3 Rescue Team (C.3).' },
@@ -109,7 +109,7 @@
     '1.1.3': ['shown', 'Acknowledge button → acknowledgment route'], '1.2.1': ['shown', 'Order card on team tablet'],
     '1.2.2': ['shown', 'Status timeline on console'], '1.3.1': ['shown', 'contracts/api-v1.yaml, contract checks'],
     '1.3.2': ['shown', 'Coordinator console'], '1.3.3': ['shown', 'Rescue Team tablet'],
-    '1.4.1': ['shown', 'Approval bound to recommendation'], '1.4.2': ['shown', 'One order per approval'],
+    '1.4.1': ['shown', 'Approval bound to recommendation'], '1.4.2': ['shown', 'Second order for one approval → 409'],
     '1.4.3': ['shown', 'Wrong-team acknowledgment rejected'], '1.4.4': ['shown', 'Status from recorded events only'],
     '2.1.1': ['shown', 'Send without approval → 409'], '2.2.1': ['shown', 'Runs in any current browser'],
     '2.2.2': ['planned', 'Offline queue not built yet'], '2.3.1': ['shown', 'f2-5 module makes no model calls'],
@@ -118,10 +118,8 @@
     '2.6.1': ['shown', 'This Operate view, steps 5–7']
   };
 
-  function ucModel(code) {
-    var n = +String(code).split('.')[2];
-    return n <= 6 ? code : 'UC.1.' + (n + 1);
-  }
+  // Since 2026-11-08 the service code logs the current Innoslate numbering, so no conversion is needed.
+  function ucModel(code) { return code; }
   var UC_NAMES = {
     'UC.1.1': 'Submit Distress Report', 'UC.1.2': 'Register Distress Report', 'UC.1.3': 'Receive Report Receipt',
     'UC.1.4': 'Structure Incident Information', 'UC.1.5': 'Request Resource Status', 'UC.1.6': 'Provide Resource Status',

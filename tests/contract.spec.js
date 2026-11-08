@@ -6,8 +6,10 @@
  *   C.2  Each first-level function module exports every contract operation assigned to it (x-receiver/x-module).
  *   C.3  Every internal-flow call made while running UC.1 conforms to the contract: request and response bodies
  *        validate against the schemas, and the returned status code is one the contract declares.
- *   C.4  Every internal flow IO.10–IO.14 crossed a boundary through the contract at least once.
- *   C.5  No first-level function module calls another one directly (internal flows go only through the contract).
+ *   C.4  Every internal flow IO.10–IO.17 crossed a boundary through the contract at least once (IO.15–IO.17 are the
+ *        second-level flows inside F.2.5 Manage Dispatch Orders).
+ *   C.5  No function module calls a module outside its own decomposition: F.2.x modules never call each other, and
+ *        only F.2.5 may call its own second-level modules F.2.5.1–F.2.5.4 (internal flows go only through the contract).
  */
 'use strict';
 var fs = require('fs');
@@ -20,7 +22,7 @@ var ROOT = path.join(__dirname, '..');
 var spec = yaml.parse(fs.readFileSync(path.join(ROOT, 'contracts', 'api-v1.yaml'), 'utf8'));
 var OPS = gen.operations(spec);
 var SCHEMAS = spec.components.schemas;
-var INTERNAL_FLOWS = ['IO.10', 'IO.11', 'IO.12', 'IO.13', 'IO.14'];
+var INTERNAL_FLOWS = ['IO.10', 'IO.11', 'IO.12', 'IO.13', 'IO.14', 'IO.15', 'IO.16', 'IO.17'];
 
 function resolve(s) {
   if (s && s.$ref) return SCHEMAS[s.$ref.split('/').pop()];
@@ -93,7 +95,7 @@ var CHECKS = [
     var current = fs.readFileSync(path.join(ROOT, 'contracts', 'generated', 'internal-stubs.js'), 'utf8');
     ok(current === gen.render(spec), 'run npm run generate:stubs');
   } },
-  { id: 'C.2', name: 'Each F.2.x module exports every contract operation assigned to it', run: function () {
+  { id: 'C.2', name: 'Each function module exports every contract operation assigned to it', run: function () {
     var ctx = { now: function () { return new Date(); }, nextId: function (p) { return p + '-0001'; }, log: function () {} };
     OPS.forEach(function (o) {
       var mod = require(path.join(ROOT, 'rescutech-orchestrator', 'functions', o.module + '.js'));
@@ -115,7 +117,7 @@ var CHECKS = [
     });
     ok(errors.length === 0, errors.slice(0, 5).join('; '));
   } },
-  { id: 'C.4', name: 'Internal flows IO.10–IO.14 all cross a boundary through the contract', run: function () {
+  { id: 'C.4', name: 'Internal flows IO.10–IO.17 all cross a boundary through the contract', run: function () {
     var seen = {};
     runScenarios().forEach(function (c) {
       var op = OPS.filter(function (o) { return o.operationId === c.operationId; })[0];
@@ -124,12 +126,18 @@ var CHECKS = [
     var missing = INTERNAL_FLOWS.filter(function (fl) { return !seen[fl]; });
     ok(missing.length === 0, 'not exercised: ' + missing.join(', '));
   } },
-  { id: 'C.5', name: 'No F.2.x module calls another F.2.x module directly', run: function () {
+  { id: 'C.5', name: 'No function module reaches outside its own decomposition', run: function () {
     var dir = path.join(ROOT, 'rescutech-orchestrator', 'functions');
     fs.readdirSync(dir).filter(function (n) { return /^f2-\d/.test(n); }).forEach(function (n) {
-      var own = 'RescuTechF2' + n.charAt(3);                       // the module's own browser global
-      var src = fs.readFileSync(path.join(dir, n), 'utf8').split(own).join('');
-      ok(!/require\(['"]\.\/f2-|RescuTechF2\d/.test(src), n + ' reaches into another first-level function');
+      var own = n.match(/^f2-(\d+(?:-\d+)*)-[a-z]/)[1].replace(/-/g, '');        // 'f2-5-…' -> '5', 'f2-5-1-…' -> '51'
+      var src = fs.readFileSync(path.join(dir, n), 'utf8'), refs = [], m;
+      var req = /require\(['"]\.\/f2-(\d+(?:-\d+)*)-[a-z]/g, glob = /RescuTechF2(\d+)/g;
+      while ((m = req.exec(src))) refs.push(m[1].replace(/-/g, ''));
+      while ((m = glob.exec(src))) refs.push(m[1]);
+      refs.forEach(function (r) {
+        var self = r === own, child = r.length === own.length + 1 && r.indexOf(own) === 0;
+        ok(self || child, n + ' reaches into F.2.' + r.split('').join('.') + ', outside its own decomposition');
+      });
     });
   } }
 ];

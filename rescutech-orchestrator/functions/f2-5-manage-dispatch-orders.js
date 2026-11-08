@@ -1,92 +1,97 @@
 /*
  * F.2.5 Manage Dispatch Orders (first-level function of F.2, Innoslate project 584).
- *   Inputs : IO.14 Proposed Assignment (internal, from F.2.4); IO.8 Dispatch Acknowledgment (external, from F.4)
- *   Control: IO.6 Dispatch Approval (external, from F.3 Emergency Coordinator)
- *   Outputs: IO.7 Dispatch Order (to F.4); IO.9 Dispatch Status (to F.3)
- *   Satisfies: 1.1.3, 1.1.4, 1.2.4, 1.2.5, 1.3.2, 1.3.3, 2.1.1, 2.4.1, 2.4.2   UC.1 steps: UC.1.10–UC.1.14
- * Contract operation (contracts/api-v1.yaml):
- *   acceptProposedAssignment(ProposedAssignment) -> 202 Accepted | 409 Error
+ *   Mechanism: S.1.5 Dispatch Management Subsystem
+ *   Inputs : IO.14 Proposed Assignment (internal, from F.2.4); IO.8 Dispatch Acknowledgment (external, from X.3)
+ *   Control: IO.6 Dispatch Approval (external, from X.2 Emergency Coordinator)
+ *   Outputs: IO.7 Dispatch Order (to X.3); IO.9 Dispatch Status (to X.2)
+ *   Satisfies: 1.1.3, 1.1.4, 1.2.4, 1.2.5, 1.3.2, 1.3.3, 2.1.1, 2.4.1, 2.4.2   UC.1 steps: UC.1.11–UC.1.15
+ *
+ * Decomposed in the second-level IDEF0 into four functions, one module each (same directory):
+ *   F.2.5.1 Compile Authorized Dispatch Order   S.1.5.1   f2-5-1-compile-authorized-dispatch-order.js
+ *   F.2.5.2 Issue Dispatch Order                S.1.5.2   f2-5-2-issue-dispatch-order.js
+ *   F.2.5.3 Verify Dispatch Acknowledgment      S.1.5.3   f2-5-3-verify-dispatch-acknowledgment.js
+ *   F.2.5.4 Report Dispatch Status              S.1.5.4   f2-5-4-report-dispatch-status.js
+ * This module only carries the internal flows between them, each through an operation of contracts/api-v1.yaml:
+ *   F.2.5.1 --IO.15--> F.2.5.2 --IO.16--> F.2.5.3 --IO.17--> F.2.5.4
+ * The public functions keep the UC.1 action names so workflow.js, routes.js and the front end are unchanged.
+ * Contract operation on F.2.5 itself: acceptProposedAssignment(ProposedAssignment) -> 202 Accepted | 409 Error
  */
 (function (root) {
   'use strict';
   var node = typeof module !== 'undefined' && module.exports;
   var Common = node ? require('./common.js') : root.RescuTechCommon;
+  var F251 = node ? require('./f2-5-1-compile-authorized-dispatch-order.js') : root.RescuTechF251;
+  var F252 = node ? require('./f2-5-2-issue-dispatch-order.js') : root.RescuTechF252;
+  var F253 = node ? require('./f2-5-3-verify-dispatch-acknowledgment.js') : root.RescuTechF253;
+  var F254 = node ? require('./f2-5-4-report-dispatch-status.js') : root.RescuTechF254;
   var GuardError = Common.GuardError;
 
   function create(ctx) {
-    var proposed = {}, approvals = {}, orders = {};
+    var f = { 'F.2.5.1': F251.create(ctx), 'F.2.5.2': F252.create(ctx), 'F.2.5.3': F253.create(ctx), 'F.2.5.4': F254.create(ctx) };
+    var orders = {};   // external view of IO.7 plus its acknowledgment time, for the REST layer
 
-    // Contract: acceptProposedAssignment — IO.14 in; held until the approval control arrives
+    // Every internal flow of F.2.5 crosses a module boundary here: one contract operation, request in, { status, body } out.
+    function call(receiver, operationId, request) {
+      var response = f[receiver][operationId](request);
+      if (ctx.onContractCall) ctx.onContractCall({ receiver: receiver, operationId: operationId, request: request, response: response });
+      return response;
+    }
+
+    // Contract: acceptProposedAssignment — IO.14 in; held by S.1.5.1 until the approval control arrives
     function acceptProposedAssignment(pa) {
-      if (proposed[pa.recommendationId]) {
+      if (!f['F.2.5.1'].holdProposedAssignment(pa)) {
         return { status: 409, body: { error: 'Proposed assignment ' + pa.recommendationId + ' is already held.', rule: null } };
       }
-      proposed[pa.recommendationId] = pa;
       return { status: 202, body: { recommendationId: pa.recommendationId, held: true } };
     }
 
-    // UC.1.10 Approve Resource Assignment (X.2, control IO.6) — SR.6 / N.5, 1.1.3
+    // UC.1.11 Approve Resource Assignment (control IO.6) — F.2.5.1
     function approveResourceAssignment(recId, coordinatorName) {
-      var pa = proposed[recId];
-      if (!pa) throw new GuardError('SR.6', 'There is no recommended team to approve.');
-      var id = ctx.nextId('AP');
-      var approval = { id: id, recId: recId, incidentId: pa.incidentId, teamId: pa.teamId,
-                       by: coordinatorName || 'Emergency Coordinator', at: ctx.now() };
-      approvals[recId] = approval;
-      ctx.log('UC.1.10', 'Coordinator', approval.by + ' approved ' + pa.teamName + ' for ' + pa.incidentId + ' (' + id + ').', ['SR.6', 'N.5']);
-      return approval;
+      var approval = f['F.2.5.1'].recordApproval(recId, coordinatorName);
+      return { id: approval.id, recId: recId, incidentId: approval.incidentId, teamId: approval.teamId, by: approval.by, at: approval.at };
     }
 
-    // UC.1.11 Issue Dispatch Order (IO.7) — SR.6, SR.8 / N.5, N.7; 2.1.1
-    // GUARD: an order is issued only for the assignment the coordinator approved.
+    // UC.1.12 Issue Dispatch Order — F.2.5.1 --IO.15--> F.2.5.2, which sends IO.7 and keeps IO.16
     function issueDispatchOrder(recId) {
-      var pa = proposed[recId];
-      var approval = approvals[recId];
-      if (!pa || !approval || approval.teamId !== pa.teamId) {
-        ctx.log('UC.1.11', 'RescuTech', 'Blocked: dispatch order for ' + recId + ' has no coordinator approval.', ['SR.6', 'N.5'], 'block');
-        throw new GuardError('SR.6', 'Dispatch blocked. The Emergency Coordinator has not approved this assignment (SR.6).');
+      var authorized = call('F.2.5.1', 'compileAuthorizedDispatchOrder', { recommendationId: recId });
+      if (authorized.status !== 201) {
+        ctx.log('UC.1.12', 'RescuTech', 'Blocked: dispatch order for ' + recId + ' has no coordinator approval.', ['SR.6', 'N.5'], 'block');
+        throw new GuardError(authorized.body.rule, authorized.body.error);
       }
-      var id = ctx.nextId('DO');
-      var order = {
-        id: id, recId: recId, incidentId: pa.incidentId, teamId: pa.teamId, teamName: pa.teamName,
-        location: pa.location, task: pa.task, urgency: pa.urgency,
-        approvalId: approval.id, issuedAt: ctx.now(), acknowledgedAt: null
-      };
-      orders[id] = order;
-      ctx.log('UC.1.11', 'RescuTech', 'Dispatch order ' + id + ' sent to ' + order.teamName + ' (location and task included).', ['SR.6', 'SR.8', 'N.7']);
-      return order;
+      var issued = call('F.2.5.2', 'issueDispatchOrder', authorized.body);
+      if (issued.status !== 201) throw new GuardError(issued.body.rule, issued.body.error);
+      var o = issued.body.dispatchOrder;
+      orders[o.orderId] = { id: o.orderId, recId: recId, incidentId: o.incidentId, teamId: o.teamId, teamName: o.teamName,
+                            location: o.location, task: o.task, urgency: o.urgency, approvalId: o.approvalId,
+                            issuedAt: o.issuedAt, acknowledgedAt: null };
+      return orders[o.orderId];
     }
 
-    // UC.1.12 Acknowledge Dispatch Order (IO.8) -> UC.1.13 Record Dispatch Acknowledgment — SR.9 / N.6; 2.4.1, 2.4.2
+    // UC.1.13 Acknowledge Dispatch Order (IO.8) -> UC.1.14 Record Dispatch Acknowledgment — F.2.5.3 with IO.16
     function acknowledgeDispatchOrder(orderId, teamId) {
-      var order = orders[orderId];
-      if (!order) throw new GuardError('SR.9', 'Unknown dispatch order ' + orderId + '.');
-      if (order.teamId !== teamId) {
-        ctx.log('UC.1.12', 'Rescue Team', 'Rejected: acknowledgment from ' + teamId + ' does not match the assigned team.', ['SR.9'], 'block');
-        throw new GuardError('SR.9', 'This order is assigned to a different team.');
-      }
-      ctx.log('UC.1.12', 'Rescue Team', order.teamName + ' acknowledged receipt of ' + orderId + '.', ['SR.9', 'N.6']);
-      order.acknowledgedAt = ctx.now();
-      ctx.log('UC.1.13', 'RescuTech', 'Acknowledgment recorded against ' + orderId + '.', ['SR.9']);
-      return order;
+      var verified = call('F.2.5.3', 'verifyDispatchAcknowledgment', {
+        dispatchAcknowledgment: { orderId: orderId, teamId: teamId },
+        issuedOrderRecord: f['F.2.5.2'].records[orderId] || null
+      });
+      if (verified.status !== 201) throw new GuardError(verified.body.rule, verified.body.error);
+      orders[orderId].acknowledgedAt = verified.body.acknowledgedAt;
+      return orders[orderId];
     }
 
-    // UC.1.14 Present Dispatch Status (IO.9) — SR.7 / N.6. Derived only from recorded events.
+    // UC.1.15 Present Dispatch Status (IO.9) — F.2.5.3 --IO.17--> F.2.5.4
     function presentDispatchStatus(orderId) {
-      var order = orders[orderId];
-      if (!order) return { code: 'NO_ORDER', label: 'No order issued' };
-      return order.acknowledgedAt
-        ? { code: 'ACKNOWLEDGED', label: 'Acknowledged by ' + order.teamName }
-        : { code: 'AWAITING_ACK', label: 'Issued, awaiting acknowledgment' };
+      if (!orders[orderId]) return { code: 'NO_ORDER', label: 'No order issued' };
+      var status = call('F.2.5.4', 'reportDispatchStatus', { orderId: orderId, verifiedAcknowledgment: f['F.2.5.3'].verified[orderId] || null });
+      return { code: status.body.code, label: status.body.label };
     }
 
-    return { proposed: proposed, approvals: approvals, orders: orders,
+    return { functions: f, proposed: f['F.2.5.1'].proposed, approvals: f['F.2.5.1'].approvals, orders: orders,
              acceptProposedAssignment: acceptProposedAssignment, approveResourceAssignment: approveResourceAssignment,
              issueDispatchOrder: issueDispatchOrder, acknowledgeDispatchOrder: acknowledgeDispatchOrder,
              presentDispatchStatus: presentDispatchStatus };
   }
 
-  var api = { id: 'F.2.5', create: create };
+  var api = { id: 'F.2.5', mechanism: 'S.1.5', create: create };
   if (node) module.exports = api;
   else root.RescuTechF25 = api;
 })(this);
