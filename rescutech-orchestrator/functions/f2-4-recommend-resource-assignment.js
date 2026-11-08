@@ -2,7 +2,7 @@
  * F.2.4 Recommend Resource Assignment (first-level function of F.2, Innoslate project 584).
  *   Inputs : IO.12 Structured Incident (from F.2.2); IO.13 Current Resource Availability (from F.2.3)
  *   Outputs: IO.5 Dispatch Recommendation (external, to F.3 Emergency Coordinator); IO.14 Proposed Assignment (internal, to F.2.5)
- *   Satisfies: 1.2.3, 1.3.2, 2.1.4, 2.3.2   UC.1 steps: UC.1.7, UC.1.8
+ *   Satisfies: 1.2.3, 1.3.2, 2.1.4, 2.3.2   UC.1 steps: UC.1.8, UC.1.9
  * Contract operation (contracts/api-v1.yaml):
  *   recommendResourceAssignment(RecommendationInput) -> 201 RecommendationResult
  * Works only on the two flows it receives; it does not read F.2.2's or F.2.3's internal state.
@@ -21,7 +21,7 @@
   function create(ctx) {
     var recommendations = {};
 
-    // UC.1.7 Evaluate Resource Suitability (STUB: rule-based matching) — SR.4 / N.4
+    // UC.1.8 Evaluate Resource Suitability (STUB: rule-based matching) — SR.4 / N.4
     function evaluate(inc, availability) {
       var zones = Structurer.ZONES;
       var evaluated = availability.teams.map(function (t) {
@@ -42,13 +42,13 @@
         if (a.suitable !== b.suitable) return a.suitable ? -1 : 1;
         return (a.distanceKm === null ? 999 : a.distanceKm) - (b.distanceKm === null ? 999 : b.distanceKm);
       });
-      ctx.log('UC.1.7', 'RescuTech', evaluated.filter(function (e) { return e.suitable; }).length + ' of ' +
+      ctx.log('UC.1.8', 'RescuTech', evaluated.filter(function (e) { return e.suitable; }).length + ' of ' +
               evaluated.length + ' teams meet availability and capability conditions [stub rules].', ['SR.4']);
       return evaluated;
     }
 
     // Contract: recommendResourceAssignment — IO.12 + IO.13 in; IO.5 (external) and IO.14 out.
-    // UC.1.8 Present Dispatch Recommendation — SR.4, SR.5 / N.4; 2.3.2 (report time shown); 2.1.4 (no match)
+    // UC.1.9 Present Dispatch Recommendation — SR.4, SR.5 / N.4; 2.3.2 (report time shown); 2.1.4 (no match)
     function recommendResourceAssignment(input) {
       var inc = input.structuredIncident;
       var evaluated = evaluate(inc, input.currentResourceAvailability);
@@ -63,7 +63,7 @@
       var rec = { id: id, incidentId: inc.incidentId, teamId: best ? best.teamId : null, teamName: best ? best.name : null,
                   rationale: rationale, alternatives: evaluated, status: 'PRESENTED' };
       recommendations[id] = rec;
-      ctx.log('UC.1.8', 'RescuTech', best ? 'Recommendation ' + id + ': ' + best.name + ', with rationale.'
+      ctx.log('UC.1.9', 'RescuTech', best ? 'Recommendation ' + id + ': ' + best.name + ', with rationale.'
                                           : 'Recommendation ' + id + ': no suitable team found.', ['SR.4', 'SR.5', 'N.4'],
               best ? 'ok' : 'warn');
       var proposedAssignment = best ? {                               // IO.14

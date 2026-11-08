@@ -2,7 +2,7 @@
  * F.2.3 Track Resource Status (first-level function of F.2, Innoslate project 584).
  *   Inputs : IO.11 Incident Resource Needs (internal, from F.2.2); IO.4 Resource Status (external, from F.4 Rescue Team)
  *   Outputs: IO.3 Resource Status Request (external, to F.4); IO.13 Current Resource Availability (internal, to F.2.4)
- *   Satisfies: 1.1.2, 1.2.2, 1.3.3, 2.1.3   UC.1 steps: UC.1.5, UC.1.6
+ *   Satisfies: 1.1.2, 1.2.2, 1.3.3, 2.1.3   UC.1 steps: UC.1.5, UC.1.6, UC.1.7
  * Contract operations (contracts/api-v1.yaml):
  *   requestResourceStatus(IncidentResourceNeeds) -> 202 StatusRequest
  *   getCurrentResourceAvailability(IncidentRef)  -> 200 CurrentResourceAvailability | 404 Error
@@ -43,10 +43,12 @@
     }
 
     // Contract: getCurrentResourceAvailability — IO.13 out
+    // UC.1.7 Update Resource Availability — the replies collected so far become the current availability (SR.10)
     function getCurrentResourceAvailability(ref) {
       if (!statusRequests[ref.incidentId]) {
         return { status: 404, body: { error: 'No resource-status request is open for ' + ref.incidentId, rule: null } };
       }
+      ctx.log('UC.1.7', 'RescuTech', 'Current resource availability updated from ' + teams.length + ' team status replies.', ['SR.10']);
       return {
         status: 200,
         body: {

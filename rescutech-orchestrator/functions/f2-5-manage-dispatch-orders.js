@@ -3,7 +3,7 @@
  *   Inputs : IO.14 Proposed Assignment (internal, from F.2.4); IO.8 Dispatch Acknowledgment (external, from F.4)
  *   Control: IO.6 Dispatch Approval (external, from F.3 Emergency Coordinator)
  *   Outputs: IO.7 Dispatch Order (to F.4); IO.9 Dispatch Status (to F.3)
- *   Satisfies: 1.1.3, 1.1.4, 1.2.4, 1.2.5, 1.3.2, 1.3.3, 2.1.1, 2.4.1, 2.4.2   UC.1 steps: UC.1.10–UC.1.14
+ *   Satisfies: 1.1.3, 1.1.4, 1.2.4, 1.2.5, 1.3.2, 1.3.3, 2.1.1, 2.4.1, 2.4.2   UC.1 steps: UC.1.11–UC.1.15
  * Contract operation (contracts/api-v1.yaml):
  *   acceptProposedAssignment(ProposedAssignment) -> 202 Accepted | 409 Error
  */
@@ -25,7 +25,7 @@
       return { status: 202, body: { recommendationId: pa.recommendationId, held: true } };
     }
 
-    // UC.1.10 Approve Resource Assignment (X.2, control IO.6) — SR.6 / N.5, 1.1.3
+    // UC.1.11 Approve Resource Assignment (X.2, control IO.6) — SR.6 / N.5, 1.1.3
     function approveResourceAssignment(recId, coordinatorName) {
       var pa = proposed[recId];
       if (!pa) throw new GuardError('SR.6', 'There is no recommended team to approve.');
@@ -33,17 +33,17 @@
       var approval = { id: id, recId: recId, incidentId: pa.incidentId, teamId: pa.teamId,
                        by: coordinatorName || 'Emergency Coordinator', at: ctx.now() };
       approvals[recId] = approval;
-      ctx.log('UC.1.10', 'Coordinator', approval.by + ' approved ' + pa.teamName + ' for ' + pa.incidentId + ' (' + id + ').', ['SR.6', 'N.5']);
+      ctx.log('UC.1.11', 'Coordinator', approval.by + ' approved ' + pa.teamName + ' for ' + pa.incidentId + ' (' + id + ').', ['SR.6', 'N.5']);
       return approval;
     }
 
-    // UC.1.11 Issue Dispatch Order (IO.7) — SR.6, SR.8 / N.5, N.7; 2.1.1
+    // UC.1.12 Issue Dispatch Order (IO.7) — SR.6, SR.8 / N.5, N.7; 2.1.1
     // GUARD: an order is issued only for the assignment the coordinator approved.
     function issueDispatchOrder(recId) {
       var pa = proposed[recId];
       var approval = approvals[recId];
       if (!pa || !approval || approval.teamId !== pa.teamId) {
-        ctx.log('UC.1.11', 'RescuTech', 'Blocked: dispatch order for ' + recId + ' has no coordinator approval.', ['SR.6', 'N.5'], 'block');
+        ctx.log('UC.1.12', 'RescuTech', 'Blocked: dispatch order for ' + recId + ' has no coordinator approval.', ['SR.6', 'N.5'], 'block');
         throw new GuardError('SR.6', 'Dispatch blocked. The Emergency Coordinator has not approved this assignment (SR.6).');
       }
       var id = ctx.nextId('DO');
@@ -53,25 +53,25 @@
         approvalId: approval.id, issuedAt: ctx.now(), acknowledgedAt: null
       };
       orders[id] = order;
-      ctx.log('UC.1.11', 'RescuTech', 'Dispatch order ' + id + ' sent to ' + order.teamName + ' (location and task included).', ['SR.6', 'SR.8', 'N.7']);
+      ctx.log('UC.1.12', 'RescuTech', 'Dispatch order ' + id + ' sent to ' + order.teamName + ' (location and task included).', ['SR.6', 'SR.8', 'N.7']);
       return order;
     }
 
-    // UC.1.12 Acknowledge Dispatch Order (IO.8) -> UC.1.13 Record Dispatch Acknowledgment — SR.9 / N.6; 2.4.1, 2.4.2
+    // UC.1.13 Acknowledge Dispatch Order (IO.8) -> UC.1.14 Record Dispatch Acknowledgment — SR.9 / N.6; 2.4.1, 2.4.2
     function acknowledgeDispatchOrder(orderId, teamId) {
       var order = orders[orderId];
       if (!order) throw new GuardError('SR.9', 'Unknown dispatch order ' + orderId + '.');
       if (order.teamId !== teamId) {
-        ctx.log('UC.1.12', 'Rescue Team', 'Rejected: acknowledgment from ' + teamId + ' does not match the assigned team.', ['SR.9'], 'block');
+        ctx.log('UC.1.13', 'Rescue Team', 'Rejected: acknowledgment from ' + teamId + ' does not match the assigned team.', ['SR.9'], 'block');
         throw new GuardError('SR.9', 'This order is assigned to a different team.');
       }
-      ctx.log('UC.1.12', 'Rescue Team', order.teamName + ' acknowledged receipt of ' + orderId + '.', ['SR.9', 'N.6']);
+      ctx.log('UC.1.13', 'Rescue Team', order.teamName + ' acknowledged receipt of ' + orderId + '.', ['SR.9', 'N.6']);
       order.acknowledgedAt = ctx.now();
-      ctx.log('UC.1.13', 'RescuTech', 'Acknowledgment recorded against ' + orderId + '.', ['SR.9']);
+      ctx.log('UC.1.14', 'RescuTech', 'Acknowledgment recorded against ' + orderId + '.', ['SR.9']);
       return order;
     }
 
-    // UC.1.14 Present Dispatch Status (IO.9) — SR.7 / N.6. Derived only from recorded events.
+    // UC.1.15 Present Dispatch Status (IO.9) — SR.7 / N.6. Derived only from recorded events.
     function presentDispatchStatus(orderId) {
       var order = orders[orderId];
       if (!order) return { code: 'NO_ORDER', label: 'No order issued' };

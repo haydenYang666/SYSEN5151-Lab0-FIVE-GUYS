@@ -9,7 +9,7 @@
  *   F.2.1 --IO.10--> F.2.2 --IO.11--> F.2.3 --IO.13--> F.2.4 --IO.14--> F.2.5
  *                        \--------------IO.12---------->/
  *
- * The public functions keep the UC.1 action names (UC.1.1–UC.1.15) so routes.js, the front end and the
+ * The public functions keep the UC.1 action names (UC.1.1–UC.1.16) so routes.js, the front end and the
  * acceptance checks are unchanged. Requirement IDs refer to SRD.1 (SR.x) and SyRD.1 (x.y.z).
  */
 (function (root) {
@@ -81,7 +81,7 @@
     // UC.1.6 (F.2.3): external IO.4 from the Rescue Team
     function provideResourceStatus(incidentId, teamId, status) { return f['F.2.3'].provideResourceStatus(incidentId, teamId, status); }
 
-    // UC.1.7–UC.1.8 (F.2.4): IO.13 F.2.3 -> F.2.4 and IO.12 F.2.2 -> F.2.4; IO.14 F.2.4 -> F.2.5
+    // UC.1.8–UC.1.9 (F.2.4): IO.13 F.2.3 -> F.2.4 and IO.12 F.2.2 -> F.2.4; IO.14 F.2.4 -> F.2.5
     function presentDispatchRecommendation(incidentId) {
       var flows = inTransit[incidentId];
       if (!flows) throw new GuardError('SR.4', 'Incident ' + incidentId + ' has not been structured.');
@@ -93,23 +93,23 @@
       return res.body.dispatchRecommendation;
     }
 
-    // UC.1.9 Review Dispatch Recommendation (X.2 Emergency Coordinator) — logged only
+    // UC.1.10 Review Dispatch Recommendation (X.2 Emergency Coordinator) — logged only
     function reviewDispatchRecommendation(recId) {
-      ctx.log('UC.1.9', 'Coordinator', 'Recommendation ' + recId + ' opened for review.', ['N.4']);
+      ctx.log('UC.1.10', 'Coordinator', 'Recommendation ' + recId + ' opened for review.', ['N.4']);
       return f['F.2.4'].recommendations[recId];
     }
 
-    // UC.1.10–UC.1.13 (F.2.5)
+    // UC.1.11–UC.1.14 (F.2.5)
     function approveResourceAssignment(recId, by) { return f['F.2.5'].approveResourceAssignment(recId, by); }
     function issueDispatchOrder(recId) { return f['F.2.5'].issueDispatchOrder(recId); }
     function acknowledgeDispatchOrder(orderId, teamId) { return f['F.2.5'].acknowledgeDispatchOrder(orderId, teamId); }
 
-    // UC.1.14 Present Dispatch Status (F.2.5, IO.9) -> UC.1.15 Review Dispatch Status (X.2) — SR.7 / N.6
+    // UC.1.15 Present Dispatch Status (F.2.5, IO.9) -> UC.1.16 Review Dispatch Status (X.2) — SR.7 / N.6
     function presentDispatchStatus(orderId) { return f['F.2.5'].presentDispatchStatus(orderId); }
     function reviewDispatchStatus(orderId) {
       var s = presentDispatchStatus(orderId);
-      ctx.log('UC.1.14', 'RescuTech', 'Status for ' + orderId + ' shown to coordinator: ' + s.label + '.', ['SR.7']);
-      ctx.log('UC.1.15', 'Coordinator', 'Coordinator reviewed status of ' + orderId + '.', ['SR.7', 'N.6']);
+      ctx.log('UC.1.15', 'RescuTech', 'Status for ' + orderId + ' shown to coordinator: ' + s.label + '.', ['SR.7']);
+      ctx.log('UC.1.16', 'Coordinator', 'Coordinator reviewed status of ' + orderId + '.', ['SR.7', 'N.6']);
       return s;
     }
 

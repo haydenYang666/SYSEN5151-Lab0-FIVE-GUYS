@@ -1,7 +1,8 @@
 # Route table — entry points mapped to use cases (Lab Manual §6.4)
 
 Audit of every entry point in the application against the use cases in Innoslate project 584
-(model state checked 2026-10-23: UC.1 with steps UC.1.1–UC.1.15; UC.2 and UC.3 exist as empty placeholders).
+(model state checked 2026-10-23; step numbers updated 2026-11-08 to the current UC.1 Action Diagram, UC.1.1–UC.1.16,
+which added UC.1.7 Update Resource Availability; UC.2 and UC.3 exist as empty placeholders).
 Entry points were enumerated from `rescutech-orchestrator/routes.js`, which is the only route table: `server.js`
 serves it over HTTP and `frontend/api-client.js` calls the same table in-process, so there is no second path.
 The front end calls nothing outside this table.
@@ -19,13 +20,13 @@ The front end calls nothing outside this table.
 | 2 | `POST /api/distress-reports/:id/incident` | UC.1.4 Structure Incident Information | Demo step "structure" | Calls the stubbed incident-structuring agent |
 | 3 | `POST /api/incidents/:id/status-requests` | UC.1.5 Request Resource Status | Demo step "request" | |
 | 4 | `PUT /api/incidents/:id/team-status/:teamId` | UC.1.6 Provide Resource Status | Simulated Rescue Team | |
-| 5 | `POST /api/incidents/:id/recommendation` | UC.1.7 Evaluate Resource Suitability, UC.1.8 Present Dispatch Recommendation, UC.1.9 Review Dispatch Recommendation | Demo step "status" | UC.1.9 is a Coordinator action; the route only logs that the recommendation was opened |
-| 6 | `POST /api/recommendations/:id/approval` | UC.1.10 Approve Resource Assignment | Coordinator console | |
-| 7 | `POST /api/recommendations/:id/dispatch-order` | UC.1.11 Issue Dispatch Order | Coordinator console | 409 without a matching approval (SR.6) |
-| 8 | `POST /api/dispatch-orders/:id/acknowledgment` | UC.1.12 Acknowledge Dispatch Order, UC.1.13 Record Dispatch Acknowledgment | Simulated Rescue Team | 409 if the sender is not the assigned team (SR.9) |
-| 9 | `GET /api/dispatch-orders/:id/status` | UC.1.14 Present Dispatch Status, UC.1.15 Review Dispatch Status | Coordinator console | UC.1.15 is a Coordinator action; the route only logs it |
+| 5 | `POST /api/incidents/:id/recommendation` | UC.1.7 Update Resource Availability, UC.1.8 Evaluate Resource Suitability, UC.1.9 Present Dispatch Recommendation, UC.1.10 Review Dispatch Recommendation | Demo step "status" | UC.1.10 is a Coordinator action; the route only logs that the recommendation was opened |
+| 6 | `POST /api/recommendations/:id/approval` | UC.1.11 Approve Resource Assignment | Coordinator console | |
+| 7 | `POST /api/recommendations/:id/dispatch-order` | UC.1.12 Issue Dispatch Order | Coordinator console | 409 without a matching approval (SR.6) |
+| 8 | `POST /api/dispatch-orders/:id/acknowledgment` | UC.1.13 Acknowledge Dispatch Order, UC.1.14 Record Dispatch Acknowledgment | Simulated Rescue Team | 409 if the sender is not the assigned team (SR.9) |
+| 9 | `GET /api/dispatch-orders/:id/status` | UC.1.15 Present Dispatch Status, UC.1.16 Review Dispatch Status | Coordinator console | UC.1.16 is a Coordinator action; the route only logs it |
 
-All 15 steps of UC.1 are reached by at least one entry point.
+All 16 steps of UC.1 are reached by at least one entry point.
 
 ## Orphan entry points (4) — trace to no use case
 

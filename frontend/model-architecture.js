@@ -2,7 +2,7 @@
  * Physical architecture (Form) from Innoslate project 584, as used by the Architecture view and the
  * function strip. Function -> performing asset is one-to-one at both levels (F.2.x -> S.1.x, F.2.5.x -> S.1.5.x).
  * UC numbers follow the current Innoslate UC.1 Action Diagram (UC.1.1–UC.1.16, with UC.1.7 Update Resource
- * Availability). The service code still logs the earlier 15-step numbering; ucModel() converts it.
+ * Availability), the same numbering the service code logs.
  */
 (function (root) {
   'use strict';
@@ -118,10 +118,8 @@
     '2.6.1': ['shown', 'This Operate view, steps 5–7']
   };
 
-  function ucModel(code) {
-    var n = +String(code).split('.')[2];
-    return n <= 6 ? code : 'UC.1.' + (n + 1);
-  }
+  // Since 2026-11-08 the service code logs the current Innoslate numbering, so no conversion is needed.
+  function ucModel(code) { return code; }
   var UC_NAMES = {
     'UC.1.1': 'Submit Distress Report', 'UC.1.2': 'Register Distress Report', 'UC.1.3': 'Receive Report Receipt',
     'UC.1.4': 'Structure Incident Information', 'UC.1.5': 'Request Resource Status', 'UC.1.6': 'Provide Resource Status',
