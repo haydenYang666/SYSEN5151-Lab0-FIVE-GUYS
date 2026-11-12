@@ -1,11 +1,11 @@
 /*
  * STUB — Rescue Team status source (simulated teams).
  *
- * Model link : X.3 Rescue Team, Interface 4; UC.1.6 Provide Resource Status
+ * Model link : X.3 Rescue Team, Interface 4; UC.1.6 Push Status Update
  * Requirement: SR.10 — the Rescue Team provides availability, location, and capability
- *              in response to a resource-status request.
+ *              whenever it changes and in response to a status refresh request.
  * Why a stub : real field units are outside the system boundary. These simulated teams
- *              answer the status request so the end-to-end path can run. All names are
+ *              have pushed their status when the scenario starts. All names are
  *              fictional; no real agency is represented.
  */
 (function (root) {

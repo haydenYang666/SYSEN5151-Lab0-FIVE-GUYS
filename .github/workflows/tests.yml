@@ -17,6 +17,10 @@ jobs:
         run: node tests/contract.spec.js
       - name: Functional requirement checks for F.2.5, named by requirement ID (Node)
         run: node tests/functional-requirements.spec.js
+      - name: Claude rescue agent checks with a mocked API (SyRD 2.3.1, 2.3.3, 2.5.1, CRD 2.3.1)
+        run: node tests/agent.spec.js
+      - name: Instrumentation smoke run (5 UC.1 runs, keyword stub)
+        run: node scripts/measure-uc1.js 5
       - name: Functional requirement tests, one pytest test per requirement ID
         run: |
           pip install pytest

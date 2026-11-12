@@ -11,6 +11,8 @@
 #   IO.15 Authorized Dispatch Order       F.2.5.1 -> F.2.5.2   (conduit C.9)
 #   IO.16 Issued Order Record             F.2.5.2 -> F.2.5.3   (conduit C.10)
 #   IO.17 Verified Acknowledgment         F.2.5.3 -> F.2.5.4   (conduit C.11)
+# Changed 2026-11-11 with the revised UC.1 (Modeling and Simulation study): requestResourceStatus became
+#   retrieveLatestTeamStatus, because Rescue Teams now push status and UC.1.5 reads it instead of polling.
 # Each internal flow is the request body of an operation on its receiving function, or the response of an
 # operation on its sending function, exactly once each way. External flows (IO.1-IO.9) are served by the
 # public REST routes in rescutech-orchestrator/routes.js and are not part of this contract.
@@ -23,7 +25,7 @@
 openapi: 3.0.3
 info:
   title: RescuTech Internal Interface Contract
-  version: 1.1.0
+  version: 1.2.0
   description: Interfaces between the first-level functions F.2.1-F.2.5 of S.1 RescuTech Disaster Response Agent Orchestrator, and between the second-level functions F.2.5.1-F.2.5.4 of F.2.5.
 
 paths:
@@ -56,10 +58,10 @@ paths:
               schema:
                 $ref: '#/components/schemas/Error'
 
-  /internal/f2-3/status-requests:
+  /internal/f2-3/latest-team-status:
     post:
-      operationId: requestResourceStatus
-      summary: F.2.2 -> F.2.3 delivers IO.11 Incident Resource Needs; F.2.3 opens a resource-status request (external IO.3)
+      operationId: retrieveLatestTeamStatus
+      summary: F.2.2 -> F.2.3 delivers IO.11 Incident Resource Needs; F.2.3 reads the latest status the Rescue Teams pushed (UC.1.5) and sends the optional external IO.3 Status Refresh Request only to stale teams
       x-receiver: F.2.3
       x-module: f2-3-track-resource-status
       x-flows-in: [IO.11]
@@ -73,11 +75,11 @@ paths:
               $ref: '#/components/schemas/IncidentResourceNeeds'
       responses:
         '202':
-          description: Status request opened; Rescue Team responses (external IO.4) arrive later.
+          description: Latest pushed status retrieved; nothing waits for refresh replies (IO.3 and IO.4 are optional flows in UC.1).
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/StatusRequest'
+                $ref: '#/components/schemas/StatusRetrieval'
 
   /internal/f2-3/availability:
     post:
@@ -293,6 +295,10 @@ components:
         description:
           type: string
           description: Assistance description exactly as entered by the Citizen (non-empty).
+        channel:
+          type: string
+          enum: [voice, text]
+          description: Intake channel. voice is the primary channel (call transcript from the AI voice intake agent); text is the fallback form.
         registeredAt:
           type: string
           format: date-time
@@ -384,19 +390,23 @@ components:
         incidentId:
           type: string
 
-    StatusRequest:
+    StatusRetrieval:
       type: object
-      required: [incidentId, requestedTeamIds, requestedAt]
+      required: [incidentId, retrievedAt, teamIds, staleTeamIds]
       properties:
         incidentId:
           type: string
-        requestedTeamIds:
+        retrievedAt:
+          type: string
+          format: date-time
+        teamIds:
           type: array
           items:
             type: string
-        requestedAt:
-          type: string
-          format: date-time
+        staleTeamIds:
+          type: array
+          items:
+            type: string
 
     TeamAvailability:
       type: object

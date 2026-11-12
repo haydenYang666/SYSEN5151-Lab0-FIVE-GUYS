@@ -21,13 +21,36 @@ the software boundary.
 
 ```bash
 npm start          # http://localhost:3000  — front end + REST API, no dependencies (Node 18+)
-npm test           # 12 need-linked acceptance checks + 5 contract checks + 17 F.2.5 requirement checks
+npm test           # 12 need-linked acceptance checks + 5 contract checks + 17 F.2.5 requirement checks + 7 agent checks (mocked API)
 npm run test:py    # the same 17 requirement checks as pytest tests, one per requirement ID (needs pytest)
 # CI (.github/workflows/tests.yml) runs all of them on every push
 npm run generate:stubs   # regenerate contracts/generated/ after changing contracts/api-v1.yaml
 ```
 
 You can also open `frontend/index.html` directly from disk; it then runs the same route table in the page.
+
+### Claude rescue agent (UC.1.4 structuring and the UC.1.9 recommendation briefing)
+
+```bash
+export ANTHROPIC_API_KEY=...        # your own key; never commit it
+npm start                           # top bar shows "Claude agent · claude-haiku-4-5"
+```
+
+Without the key the server and the static page use the keyword stub (`incident-structuring-agent/agent.stub.js`).
+The agent only fills the structured-incident schema and words the briefing; F.2.2 validates its output (invalid
+output goes to manual handling, SyRD 2.3.1/2.3.3), the team is chosen by fixed rules, dispatch never calls the model
+(CRD 2.3.1), and calls stop at `RESCUTECH_BUDGET_USD` per month (default 50, SyRD 2.5.1).
+Cloud deployment: `render.yaml` (Render Blueprint); set `ANTHROPIC_API_KEY` in the Render dashboard.
+
+### Measured behavior (Modeling and Simulation, Lab Manual 10.4)
+
+```bash
+ANTHROPIC_API_KEY=... npm run measure   # 30 UC.1 runs against the real server
+```
+
+Writes `measurements/uc1-runs.csv` (every stage of every run) and `measurements/uc1-summary.md` (measured vs the
+Innoslate simulation parameters). Timing spans sit at the participant boundaries of the UC.1 sequence diagram
+(`GET /api/timings`). Human actions are not timed; voice intake is represented by its transcript (ADR 0005).
 
 The front end has three views:
 
@@ -42,7 +65,7 @@ UC step numbers everywhere (code, logs, routes, UI, docs) follow the current Inn
 
 **Model view** (top-bar switch): off shows a clean operator console; on adds the Innoslate IDs (F.2.x, S.1.x, UC, SR/CRD, STUB tags) and the Model link tab. The choice is remembered in the browser.
 
-Live demo script (≈3 minutes, F.2.5 focus): Send report → Structure → Request status (switch a team off to change the outcome) →
+Live demo script (≈3 minutes, F.2.5 focus): Place call → Structure → Read latest team status (switch a team off to change the outcome) →
 Generate recommendation → **Send order without approval (409, S.1.5.1 / SR.6)** → Approve → Issue order (S.1.5.2) →
 **Acknowledge as another team (rejected, S.1.5.3 / CRD 2.4.2)** → Acknowledge → Status (S.1.5.4) → Architecture → IDEF0 F.2.5.
 
@@ -54,7 +77,8 @@ Generate recommendation → **Send order without approval (409, S.1.5.1 / SR.6)*
 | `rescutech-orchestrator/functions/` | F.2.1–F.2.5, first-level functions of F.2; F.2.5.1–F.2.5.4, second-level functions of F.2.5 | One module per function (`f2-N-…`, `f2-5-N-…`), each performed by one asset (S.1.N, S.1.5.N); modules talk only through `contracts/api-v1.yaml` | Real (F.2.2/F.2.4 call stubs) |
 | `contracts/` | Internal flows IO.10–IO.17 | Internal interface contract v1 (OpenAPI) and stubs generated from it | Real |
 | `scripts/` | — | Stub generator and its dependency-free YAML reader | — |
-| `incident-structuring-agent/` | Model participant inside S.1 | Keyword stub returning the final structured-incident schema | Stub |
+| `incident-structuring-agent/` | S.1.2 mechanism (and S.1.4 briefing) | `agent.js`: Claude rescue agent (structuring + recommendation briefing, schema-checked, budget-capped); `agent.stub.js`: keyword fallback with the same schema | Real with API key, stub otherwise |
+| `measurements/` | Modeling and Simulation (Lab Manual 10.4) | `scripts/measure-uc1.js` output: per-stage timings of 30 UC.1 runs and the measured-vs-simulated table | Generated |
 | `resource-status-source/` | X.3 Rescue Team as status source | Five fictional teams | Stub |
 | `frontend/` | X.1, X.2, X.3 user interfaces (Interfaces 1, 3, 4) | Citizen phone, coordinator console, team tablet | Real |
 | `tests/` | SR.12; S.1.5 CRD | Need-linked acceptance checks; contract conformance checks; F.2.5 requirement checks named by requirement ID (`functional-requirements.spec.js`, `test_functional_requirements.py`) | Real |
@@ -64,10 +88,13 @@ Generate recommendation → **Send order without approval (409, S.1.5.1 / SR.6)*
 
 | Method and path | UC.1 messages | Requirement |
 |-----------------|---------------|-------------|
-| `POST /api/distress-reports` | UC.1.1–1.3 | SR.1, SR.2 |
-| `POST /api/distress-reports/:id/incident` | UC.1.4 | SR.3 |
-| `POST /api/incidents/:id/status-requests` | UC.1.5 | SR.10 |
-| `PUT /api/incidents/:id/team-status/:teamId` | UC.1.6 | SR.10 |
+| `POST /api/distress-reports` (`channel: voice` transcript or text) | UC.1.1–1.3 | SR.1, SR.2 |
+| `POST /api/distress-reports/:id/incident` | UC.1.4 (Claude agent or stub) | SR.3 |
+| `PUT /api/teams/:teamId/status` | UC.1.6 Push Status Update | SR.10 |
+| `POST /api/incidents/:id/status-requests` | UC.1.5 Retrieve Latest Team Status | SR.10 |
+| `PUT /api/incidents/:id/team-status/:teamId` | UC.1.6 (refresh reply) | SR.10 |
+| `GET /api/timings`, `POST /api/timings/reset` | Instrumentation (Lab Manual 10.4) | — |
+| `GET /api/agent` | Agent status and spend (SyRD 2.5.1) | 2.5.1 |
 | `POST /api/incidents/:id/recommendation` | UC.1.7–1.10 | SR.4, SR.5, SR.10 |
 | `POST /api/recommendations/:id/approval` | UC.1.11 | SR.6 |
 | `POST /api/recommendations/:id/dispatch-order` | UC.1.12 (409 without approval) | SR.6, SR.8 |
@@ -83,7 +110,7 @@ crosses a module boundary only through an operation of the contract; `tests/cont
 | Flow | From → To | Contract operation |
 |------|-----------|--------------------|
 | IO.10 Registered Report | F.2.1 → F.2.2 | `structureIncident` (request) |
-| IO.11 Incident Resource Needs | F.2.2 → F.2.3 | `structureIncident` (response) → `requestResourceStatus` (request) |
+| IO.11 Incident Resource Needs | F.2.2 → F.2.3 | `structureIncident` (response) → `retrieveLatestTeamStatus` (request) |
 | IO.12 Structured Incident | F.2.2 → F.2.4 | `structureIncident` (response) → `recommendResourceAssignment` (request) |
 | IO.13 Current Resource Availability | F.2.3 → F.2.4 | `getCurrentResourceAvailability` (response) → `recommendResourceAssignment` (request) |
 | IO.14 Proposed Assignment | F.2.4 → F.2.5 | `recommendResourceAssignment` (response) → `acceptProposedAssignment` (request) |

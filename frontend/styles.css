@@ -96,6 +96,10 @@ main { max-width: 1440px; margin: 0 auto; padding: 18px 24px 32px; }
 .tag { display: inline-block; padding: 1px 7px; border-radius: 6px; font-size: 10.5px; font-weight: 700; letter-spacing: .04em; vertical-align: middle; }
 .tag.stub { background: var(--stub-soft); color: var(--stub); }
 .tag.real { background: var(--ok-soft); color: var(--ok); }
+.tag.ai { background: #efe7ff; color: #5b3cc4; }
+.note.ai { background: #f3efff; border-color: transparent; }
+.note.ai b { color: #5b3cc4; }
+.transport.ai i { background: #7a5af8; }
 .quote { margin: 0; padding: 10px 12px; border-left: 3px solid var(--c-cit); background: var(--surface-2); border-radius: 0 10px 10px 0; font-size: 13px; }
 
 .teams { display: grid; gap: 6px; }

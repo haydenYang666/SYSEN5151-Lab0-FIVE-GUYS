@@ -3,6 +3,8 @@
 Audit of every entry point in the application against the use cases in Innoslate project 584
 (model state checked 2026-10-23; step numbers updated 2026-11-08 to the current UC.1 Action Diagram, UC.1.1–UC.1.16,
 which added UC.1.7 Update Resource Availability; UC.2 and UC.3 exist as empty placeholders).
+Updated 2026-11-11 for the revised UC.1 (Modeling and Simulation study): voice-call intake and pushed team status.
+UC.4 Conventional 911 CAD Dispatch is a model-only alternative scenario for the simulation comparison and has no entry point.
 Entry points were enumerated from `rescutech-orchestrator/routes.js`, which is the only route table: `server.js`
 serves it over HTTP and `frontend/api-client.js` calls the same table in-process, so there is no second path.
 The front end calls nothing outside this table.
@@ -12,14 +14,15 @@ The front end calls nothing outside this table.
 > actor. The justification is recorded in `docs/decisions/0002-orphan-entry-points-kept-as-demo-harness.md`
 > (§6.4: "Either delete it, or add the missing use case to the model and justify it. Do not leave it.").
 
-## Operational entry points (9) — each serves UC.1
+## Operational entry points (10) — each serves UC.1
 
 | # | Entry point | Use case step(s) | Called by | Notes |
 |---|-------------|------------------|-----------|-------|
-| 1 | `POST /api/distress-reports` | UC.1.1 Submit Distress Report, UC.1.2 Register Distress Report, UC.1.3 Receive Report Receipt | Citizen form | 422 if location or description is missing (SR.1) |
-| 2 | `POST /api/distress-reports/:id/incident` | UC.1.4 Structure Incident Information | Demo step "structure" | Calls the stubbed incident-structuring agent |
-| 3 | `POST /api/incidents/:id/status-requests` | UC.1.5 Request Resource Status | Demo step "request" | |
-| 4 | `PUT /api/incidents/:id/team-status/:teamId` | UC.1.6 Provide Resource Status | Simulated Rescue Team | |
+| 1 | `POST /api/distress-reports` | UC.1.1 Call Emergency Line, UC.1.2 Answer and Transcribe Call, UC.1.3 Confirm Report Details | Citizen call (transcript, `channel: voice`) or text fallback | 422 if location or description is missing (SR.1); the prototype receives the call transcript, see ADR 0005 |
+| 2 | `POST /api/distress-reports/:id/incident` | UC.1.4 Structure Incident Information | Demo step "structure" | Claude agent when the server has an API key, otherwise the keyword stub |
+| 3 | `PUT /api/teams/:teamId/status` | UC.1.6 Push Status Update | Simulated Rescue Team, any time | IO.4 is optional for UC.1.7: nothing waits for it |
+| 4 | `POST /api/incidents/:id/status-requests` | UC.1.5 Retrieve Latest Team Status | Demo step "team status" | Reads the latest pushed status; sends IO.3 Status Refresh Request only to stale teams |
+| 4a | `PUT /api/incidents/:id/team-status/:teamId` | UC.1.6 Push Status Update (refresh reply for one incident) | Simulated Rescue Team, tests | Same push as row 3 |
 | 5 | `POST /api/incidents/:id/recommendation` | UC.1.7 Update Resource Availability, UC.1.8 Evaluate Resource Suitability, UC.1.9 Present Dispatch Recommendation, UC.1.10 Review Dispatch Recommendation | Demo step "status" | UC.1.10 is a Coordinator action; the route only logs that the recommendation was opened |
 | 6 | `POST /api/recommendations/:id/approval` | UC.1.11 Approve Resource Assignment | Coordinator console | |
 | 7 | `POST /api/recommendations/:id/dispatch-order` | UC.1.12 Issue Dispatch Order | Coordinator console | 409 without a matching approval (SR.6) |

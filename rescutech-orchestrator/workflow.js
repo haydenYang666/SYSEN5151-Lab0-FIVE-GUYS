@@ -31,6 +31,7 @@
 
     var ctx = {
       now: now,
+      statusStaleMs: opts.statusStaleMs,
       onContractCall: opts.onContractCall,   // F.2.5 reports its second-level internal flows (IO.15–IO.17) here too
       nextId: function (prefix) { seq[prefix] += 1; return prefix + '-' + String(seq[prefix]).padStart(4, '0'); },
       log: function (uc, actor, text, refs, kind) {
@@ -45,8 +46,13 @@
               'F.2.4': F24.create(ctx), 'F.2.5': F25.create(ctx) };
 
     // Every internal flow passes through here: one contract operation, request in, { status, body } out.
-    function call(receiver, operationId, request) {
-      var response = f[receiver][operationId](request);
+    // opts.onSpan (instrumentation, Lab Manual 10.4) receives the entry and exit time of each call.
+    var hr = opts.hrNow || (typeof performance !== 'undefined' && performance.now ? function () { return performance.now(); } : function () { return Date.now(); });
+    function call(receiver, operationId, request, mechanismOutput) {
+      var t0 = hr();
+      var response = f[receiver][operationId](request, mechanismOutput);
+      var t1 = hr();
+      if (opts.onSpan) opts.onSpan({ kind: 'contract', receiver: receiver, operationId: operationId, start: t0, end: t1 });
       if (opts.onContractCall) opts.onContractCall({ receiver: receiver, operationId: operationId, request: request, response: response });
       return response;
     }
@@ -63,23 +69,26 @@
     // UC.1.1–UC.1.3 (F.2.1)
     function submitDistressReport(input) { return f['F.2.1'].submitDistressReport(input); }
 
-    // UC.1.4 (F.2.2): IO.10 F.2.1 -> F.2.2; F.2.2 returns IO.11 and IO.12
-    function structureIncidentInformation(reportId) {
-      var res = call('F.2.2', 'structureIncident', f['F.2.1'].registeredReport(reportId));
+    // UC.1.4 (F.2.2): IO.10 F.2.1 -> F.2.2; F.2.2 returns IO.11 and IO.12.
+    // agentOutput: the Claude agent's result for this report (server only); omitted -> keyword stub.
+    function structureIncidentInformation(reportId, agentOutput) {
+      var res = call('F.2.2', 'structureIncident', f['F.2.1'].registeredReport(reportId), agentOutput);
       if (res.status !== 201) return { error: res.body.error, rule: res.body.rule };
       inTransit[res.body.structuredIncident.incidentId] = res.body;
       return f['F.2.2'].incidents[res.body.structuredIncident.incidentId];
     }
 
-    // UC.1.5 (F.2.3): IO.11 F.2.2 -> F.2.3
-    function requestResourceStatus(incidentId) {
+    // UC.1.5 Retrieve Latest Team Status (F.2.3): IO.11 F.2.2 -> F.2.3
+    function retrieveLatestTeamStatus(incidentId) {
       var flows = inTransit[incidentId];
       if (!flows) throw new GuardError('SR.10', 'Incident ' + incidentId + ' has not been structured.');
-      var res = call('F.2.3', 'requestResourceStatus', flows.incidentResourceNeeds);
-      return f['F.2.3'].statusRequests[res.body.incidentId];
+      var res = call('F.2.3', 'retrieveLatestTeamStatus', flows.incidentResourceNeeds);
+      return res.body;
     }
 
-    // UC.1.6 (F.2.3): external IO.4 from the Rescue Team
+    // UC.1.6 Push Status Update (F.2.3): external IO.4 pushed by the Rescue Team at any time
+    function pushStatusUpdate(teamId, status) { return f['F.2.3'].pushStatusUpdate(teamId, status); }
+    // Same push, answering a Status Refresh Request (IO.3) for one incident
     function provideResourceStatus(incidentId, teamId, status) { return f['F.2.3'].provideResourceStatus(incidentId, teamId, status); }
 
     // UC.1.8–UC.1.9 (F.2.4): IO.13 F.2.3 -> F.2.4 and IO.12 F.2.2 -> F.2.4; IO.14 F.2.4 -> F.2.5
@@ -117,9 +126,12 @@
     return {
       state: state,
       functions: f,
+      registeredReport: function (reportId) { return f['F.2.1'].registeredReport(reportId); },
       submitDistressReport: submitDistressReport,
       structureIncidentInformation: structureIncidentInformation,
-      requestResourceStatus: requestResourceStatus,
+      retrieveLatestTeamStatus: retrieveLatestTeamStatus,
+      requestResourceStatus: retrieveLatestTeamStatus,
+      pushStatusUpdate: pushStatusUpdate,
       provideResourceStatus: provideResourceStatus,
       presentDispatchRecommendation: presentDispatchRecommendation,
       reviewDispatchRecommendation: reviewDispatchRecommendation,
