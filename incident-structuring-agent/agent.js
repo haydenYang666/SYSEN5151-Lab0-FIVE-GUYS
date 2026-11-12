@@ -130,14 +130,15 @@ function createAgent(opts) {
         usage.spentUsd = (usage.inputTokens * price[0] + usage.outputTokens * price[1]) / 1e6;
       }
       usage.calls += 1; usage.last = now().toISOString();
-      if (res.status !== 200) { usage.failures += 1; return { error: 'Claude API ' + res.status + ': ' + ((res.body.error && res.body.error.message) || 'error') }; }
+      if (res.status !== 200) { usage.failures += 1; usage.lastError = 'Claude API ' + res.status + ': ' + ((res.body.error && res.body.error.message) || 'error'); return { error: usage.lastError }; }
       var block = (res.body.content || []).filter(function (c) { return c.type === 'tool_use' && c.name === tool.name; })[0];
       if (!block) { usage.failures += 1; return { error: 'Claude returned no ' + tool.name + ' call', invalid: true }; }
       return { input: block.input };
     }).catch(function (e) {
       if (timer) clearTimeout(timer);
       usage.calls += 1; usage.failures += 1; usage.last = now().toISOString();
-      return { error: e && e.name === 'AbortError' ? 'Claude API timed out after ' + timeoutMs + ' ms' : 'Claude API unreachable: ' + (e && e.message || e) };
+      usage.lastError = e && e.name === 'AbortError' ? 'Claude API timed out after ' + timeoutMs + ' ms' : 'Claude API unreachable: ' + (e && e.message || e);
+      return { error: usage.lastError };
     });
   }
 
@@ -194,7 +195,8 @@ function createAgent(opts) {
   function status() {
     return { enabled: enabled(), provider: enabled() ? 'Anthropic Claude' : 'keyword stub', model: enabled() ? model : null,
              budgetUsd: budgetUsd, month: usage.month, calls: usage.calls, failures: usage.failures,
-             spentUsd: Math.round(usage.spentUsd * 10000) / 10000, maxCallsPerMin: maxPerMin, last: usage.last };
+             spentUsd: Math.round(usage.spentUsd * 10000) / 10000, maxCallsPerMin: maxPerMin, last: usage.last,
+             lastError: usage.lastError || null, keyLooksValid: !!apiKey && /^sk-ant-api\d+-/.test(apiKey) };
   }
 
   return { enabled: enabled, structure: structure, explain: explain, status: status };

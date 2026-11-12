@@ -48,7 +48,8 @@ function req(method, p, body) {
 function sleep(ms) { return new Promise(function (r) { setTimeout(r, ms); }); }
 
 function startServer() {
-  var env = Object.assign({}, process.env, { PORT: String(PORT) });
+  // A local measurement makes ~60 Claude calls in under a minute, so lift the public-deployment rate limit here.
+  var env = Object.assign({}, process.env, { PORT: String(PORT), RESCUTECH_MAX_CALLS_PER_MIN: process.env.RESCUTECH_MAX_CALLS_PER_MIN || '1000' });
   var child = cp.spawn(process.execPath, [path.join(ROOT, 'rescutech-orchestrator/server.js')], { env: env, stdio: ['ignore', 'pipe', 'inherit'] });
   var banner = '';
   child.stdout.on('data', function (d) { banner += d; });
@@ -93,6 +94,7 @@ function f(x, d) { return x === null || x === undefined ? '–' : x.toFixed(d ==
   var agent = (await req('GET', '/api/agent')).body;
   console.log(srv.banner());
   console.log('Running UC.1 ' + RUNS + ' times (' + (agent.enabled ? 'Claude agent ' + agent.model : 'keyword stub, no API key') + ') ...');
+  if (agent.enabled && !agent.keyLooksValid) console.log('WARNING: ANTHROPIC_API_KEY does not look like an API key (expected it to start with sk-ant-api). Check for a doubled "sk-ant-" prefix.');
   var results = [], agentAfter = null;
   try {
     for (var i = 0; i < RUNS; i++) {
@@ -121,7 +123,13 @@ function f(x, d) { return x === null || x === undefined ? '–' : x.toFixed(d ==
   lines.push('- Date: ' + new Date().toISOString());
   lines.push('- Runs: ' + RUNS + ' (outcomes: ' + Object.entries(results.reduce(function (m, r) { m[r.outcome] = (m[r.outcome] || 0) + 1; return m; }, {})).map(function (e) { return e[0] + ' ' + e[1]; }).join(', ') + ')');
   lines.push('- Structuring and briefing: ' + (agent.enabled ? 'Claude agent, model ' + agent.model : 'keyword stub (no ANTHROPIC_API_KEY set), so the two model-inference stages are not represented'));
-  if (agentAfter && agentAfter.enabled) lines.push('- Claude usage for these runs: ' + agentAfter.calls + ' calls, ' + agentAfter.failures + ' failures, about $' + agentAfter.spentUsd);
+  if (agentAfter && agentAfter.enabled) {
+    lines.push('- Claude usage for these runs: ' + agentAfter.calls + ' calls, ' + agentAfter.failures + ' failures, about $' + agentAfter.spentUsd);
+    if (agentAfter.failures) {
+      lines.push('- **WARNING: ' + agentAfter.failures + ' Claude calls failed (' + agentAfter.lastError + '). Those runs fell back to the keyword stub, so the model-inference stages below are NOT real Claude timings. Fix the key or credit and run again.**');
+      console.log('WARNING: ' + agentAfter.failures + ' of ' + agentAfter.calls + ' Claude calls failed: ' + agentAfter.lastError);
+    }
+  }
   lines.push('- Input: ' + CALLS.length + ' scripted call transcripts (tests/fixtures/distress-calls.json), voice channel, cycled');
   lines.push('- Server time = entry to exit inside the server at the participant boundary; client time = HTTP round trip from this script (same machine).');
   lines.push('- Human actions (UC.1.1, UC.1.3, UC.1.6, UC.1.10, UC.1.11, UC.1.13, UC.1.16) are driven instantly by the script and are not measured.');
