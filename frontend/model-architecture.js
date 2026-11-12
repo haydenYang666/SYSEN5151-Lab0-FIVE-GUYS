@@ -21,10 +21,10 @@
       code: 'functions/f2-2-structure-incident-information.js + incident-structuring-agent/', fns: 'structureIncident()',
       api: 'POST /api/distress-reports/:id/incident' },
     'F.2.3': { kind: 'Function', name: 'Track Resource Status', asset: 'S.1.3', step: 2,
-      inputs: 'IO.11 Incident Resource Needs · IO.4 Resource Status', outputs: 'IO.3 Resource Status Request · IO.13 Current Resource Availability',
+      inputs: 'IO.11 Incident Resource Needs · IO.4 Resource Status', outputs: 'IO.3 Status Refresh Request (optional) · IO.13 Current Resource Availability',
       uc: 'UC.1.5–UC.1.7', srs: ['SR.10'], stub: true,
-      code: 'functions/f2-3-track-resource-status.js + resource-status-source/', fns: 'requestResourceStatus(), provideResourceStatus(), getCurrentResourceAvailability()',
-      api: 'POST /api/incidents/:id/status-requests · PUT …/team-status/:teamId' },
+      code: 'functions/f2-3-track-resource-status.js + resource-status-source/', fns: 'pushStatusUpdate(), retrieveLatestTeamStatus(), getCurrentResourceAvailability()',
+      api: 'PUT /api/teams/:teamId/status · POST /api/incidents/:id/status-requests' },
     'F.2.4': { kind: 'Function', name: 'Recommend Resource Assignment', asset: 'S.1.4', step: 3,
       inputs: 'IO.12 Structured Incident · IO.13 Current Resource Availability', outputs: 'IO.5 Dispatch Recommendation · IO.14 Proposed Assignment',
       uc: 'UC.1.8–UC.1.10', srs: ['SR.4', 'SR.5'], stub: true,
@@ -121,8 +121,8 @@
   // Since 2026-11-08 the service code logs the current Innoslate numbering, so no conversion is needed.
   function ucModel(code) { return code; }
   var UC_NAMES = {
-    'UC.1.1': 'Submit Distress Report', 'UC.1.2': 'Register Distress Report', 'UC.1.3': 'Receive Report Receipt',
-    'UC.1.4': 'Structure Incident Information', 'UC.1.5': 'Request Resource Status', 'UC.1.6': 'Provide Resource Status',
+    'UC.1.1': 'Call Emergency Line', 'UC.1.2': 'Answer and Transcribe Call', 'UC.1.3': 'Confirm Report Details',
+    'UC.1.4': 'Structure Incident Information', 'UC.1.5': 'Retrieve Latest Team Status', 'UC.1.6': 'Push Status Update',
     'UC.1.7': 'Update Resource Availability', 'UC.1.8': 'Evaluate Resource Suitability', 'UC.1.9': 'Present Dispatch Recommendation',
     'UC.1.10': 'Review Dispatch Recommendation', 'UC.1.11': 'Approve Resource Assignment', 'UC.1.12': 'Issue Dispatch Order',
     'UC.1.13': 'Acknowledge Dispatch Order', 'UC.1.14': 'Record Dispatch Acknowledgment', 'UC.1.15': 'Present Dispatch Status',

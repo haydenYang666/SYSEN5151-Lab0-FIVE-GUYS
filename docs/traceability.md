@@ -70,16 +70,16 @@ C.3, C.4). Not yet built, so not tested: CRD 2.2.2 (offline acknowledgment queue
 
 | Need | Requirement | Model step (UC.1 actions) | Code | Check |
 |------|-------------|---------------------------|------|-------|
-| N.1 | SR.1 | UC.1.1 Submit Distress Report | `submitDistressReport()` | N.1 / SR.1 tests |
-| N.2 | SR.2 | UC.1.2 Register Distress Report, UC.1.3 Receive Report Receipt | `registerDistressReport()` | N.2 / SR.2 test |
-| N.3 | SR.3 | UC.1.4 Structure Incident Information | `structureIncidentInformation()` → `incident-structuring-agent/agent.stub.js` | N.3 / SR.3 test |
+| N.1 | SR.1 | UC.1.1 Call Emergency Line (voice transcript, text fallback) | `submitDistressReport()` (`channel`) | N.1 / SR.1 tests |
+| N.2 | SR.2 | UC.1.2 Answer and Transcribe Call, UC.1.3 Confirm Report Details | `registerDistressReport()` | N.2 / SR.2 test |
+| N.3 | SR.3 | UC.1.4 Structure Incident Information | `structureIncidentInformation()` → `incident-structuring-agent/agent.js` (Claude) or `agent.stub.js` (fallback) | N.3 / SR.3 test; `tests/agent.spec.js` A.1–A.3 |
 | N.4 | SR.4 | UC.1.8 Evaluate Resource Suitability, UC.1.9 Present Dispatch Recommendation | F.2.4 `recommendResourceAssignment()` (`functions/f2-4-…`), via `presentDispatchRecommendation()` | N.4 / SR.4 test |
 | N.4 | SR.5 | UC.1.9, UC.1.10 Review Dispatch Recommendation | `rec.rationale`, `reviewDispatchRecommendation()` | N.4 / SR.5 test |
 | N.5 | SR.6 | UC.1.11 Approve Resource Assignment, UC.1.12 Issue Dispatch Order | `approveResourceAssignment()`, guard in `issueDispatchOrder()` | N.5 / SR.6 tests |
 | N.6 | SR.7 | UC.1.15 Present Dispatch Status, UC.1.16 Review Dispatch Status | `presentDispatchStatus()`, `reviewDispatchStatus()` | N.6 / SR.7 test |
 | N.7 | SR.8 | UC.1.12 Issue Dispatch Order | `order.location`, `order.task` | N.7 / SR.8 test |
 | N.6 | SR.9 | UC.1.13 Acknowledge Dispatch Order, UC.1.14 Record Dispatch Acknowledgment | `acknowledgeDispatchOrder()`, `recordDispatchAcknowledgment()` | N.6 / SR.9 test |
-| N.8 | SR.10 | UC.1.5 Request Resource Status, UC.1.6 Provide Resource Status, UC.1.7 Update Resource Availability | `requestResourceStatus()`, `provideResourceStatus()`, `getCurrentResourceAvailability()` → `resource-status-source/teams.stub.js` | N.8 / SR.10 test |
+| N.8 | SR.10 | UC.1.5 Retrieve Latest Team Status, UC.1.6 Push Status Update, UC.1.7 Update Resource Availability | `retrieveLatestTeamStatus()`, `pushStatusUpdate()`, `getCurrentResourceAvailability()` → `resource-status-source/teams.stub.js` | N.8 / SR.10 test |
 | N.9 | SR.11 | Delivery documentation (not an operational step) | README "Intended use, limitations, and responsibilities" | Review |
 | N.10 | SR.12 | Delivery checks (not an operational step) | `tests/acceptance.spec.js`, `.github/workflows/tests.yml` | CI |
 
@@ -95,3 +95,16 @@ corresponding resource assignment"
 
 Every button in the demo calls one UC.1.x function. Nothing in the code adds a capability outside UC.1
 (no routing, maps, rejection flow, or automatic dispatch).
+
+## Modeling and Simulation (Lab Manual Ch. 10), added 2026-11-11
+
+The revised UC.1 and the alternative UC.4 are in Innoslate project 584. Code follows the revised UC.1:
+
+| Model element | Code | Check |
+|---|---|---|
+| UC.1.1–UC.1.3 voice intake (C.1, IO.1, IO.2, S.1.1) | `f2-1-register-distress-reports.js` `channel: voice`, transcript input (ADR 0005) | acceptance N.1, N.2 |
+| UC.1.5 Retrieve Latest Team Status; IO.3 Status Refresh Request (optional) | `f2-3-…` `retrieveLatestTeamStatus()`, contract op `retrieveLatestTeamStatus` (v1.2.0) | contract C.1–C.5 |
+| UC.1.6 Push Status Update; IO.4 optional for UC.1.7 | `pushStatusUpdate()`, `PUT /api/teams/:teamId/status` | acceptance N.8 |
+| UC.1.4 / UC.1.9 Claude calls (S.1.2, S.1.4) | `incident-structuring-agent/agent.js`, called from `routes.handleAsync` | `tests/agent.spec.js` A.1–A.7 |
+| Participant boundaries of the UC.1 sequence diagram | timing spans in `routes.js` / `workflow.js call()`, `GET /api/timings` | A.6; `scripts/measure-uc1.js` |
+| UC.4 Conventional 911 CAD Dispatch (alternative) | none: model-only comparison scenario | — |

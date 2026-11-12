@@ -1,5 +1,5 @@
 /*
- * GENERATED from contracts/api-v1.yaml (RescuTech Internal Interface Contract 1.1.0) -- do not hand-edit.
+ * GENERATED from contracts/api-v1.yaml (RescuTech Internal Interface Contract 1.2.0) -- do not hand-edit.
  * Regenerate after changing the contract (npm run generate:stubs), never the other way around.
  * Signature-only stubs: each first-level function module must export exactly these operations
  * (checked by tests/contract.spec.js).
@@ -57,9 +57,9 @@ var OPERATIONS = [
     "summary": "F.2.3 -> F.2.4 provides IO.13 Current Resource Availability for one incident"
   },
   {
-    "operationId": "requestResourceStatus",
+    "operationId": "retrieveLatestTeamStatus",
     "method": "POST",
-    "path": "/internal/f2-3/status-requests",
+    "path": "/internal/f2-3/latest-team-status",
     "receiver": "F.2.3",
     "module": "f2-3-track-resource-status",
     "flowsIn": [
@@ -71,9 +71,9 @@ var OPERATIONS = [
     ],
     "request": "IncidentResourceNeeds",
     "responses": {
-      "202": "StatusRequest"
+      "202": "StatusRetrieval"
     },
-    "summary": "F.2.2 -> F.2.3 delivers IO.11 Incident Resource Needs; F.2.3 opens a resource-status request (external IO.3)"
+    "summary": "F.2.2 -> F.2.3 delivers IO.11 Incident Resource Needs; F.2.3 reads the latest status the Rescue Teams pushed (UC.1.5) and sends the optional external IO.3 Status Refresh Request only to stale teams"
   },
   {
     "operationId": "recommendResourceAssignment",
@@ -221,8 +221,8 @@ var STUBS = {
   "f2-3-track-resource-status": {
     /** F.2.3 getCurrentResourceAvailability(IncidentRef) -> 200 CurrentResourceAvailability, 404 Error. Flows in: none; flows out: IO.13. */
     getCurrentResourceAvailability: function (incidentRef) { return notImplemented("getCurrentResourceAvailability"); },
-    /** F.2.3 requestResourceStatus(IncidentResourceNeeds) -> 202 StatusRequest. Flows in: IO.11; flows out: none. */
-    requestResourceStatus: function (incidentResourceNeeds) { return notImplemented("requestResourceStatus"); }
+    /** F.2.3 retrieveLatestTeamStatus(IncidentResourceNeeds) -> 202 StatusRetrieval. Flows in: IO.11; flows out: none. */
+    retrieveLatestTeamStatus: function (incidentResourceNeeds) { return notImplemented("retrieveLatestTeamStatus"); }
   },
   "f2-4-recommend-resource-assignment": {
     /** F.2.4 recommendResourceAssignment(RecommendationInput) -> 201 RecommendationResult. Flows in: IO.12, IO.13; flows out: IO.14. */

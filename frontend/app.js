@@ -20,9 +20,9 @@
   };
   var LOG_ACTOR = { 'Citizen': 'cit', 'RescuTech': 'sys', 'Coordinator': 'coord', 'Rescue Team': 'team' };
   var STEPS = [
-    { key: 'report', fn: 'F.2.1', actor: 'cit', title: 'Report', long: 'Report an emergency' },
+    { key: 'report', fn: 'F.2.1', actor: 'cit', title: 'Call', long: 'Call the emergency line' },
     { key: 'structure', fn: 'F.2.2', actor: 'sys', title: 'Structure', long: 'Structure the incident' },
-    { key: 'status', fn: 'F.2.3', actor: 'team', title: 'Team status', long: 'Collect team status' },
+    { key: 'status', fn: 'F.2.3', actor: 'team', title: 'Team status', long: 'Read latest team status' },
     { key: 'recommend', fn: 'F.2.4', actor: 'coord', title: 'Recommend', long: 'Recommend a team' },
     { key: 'approve', fn: 'F.2.5.1', actor: 'coord', title: 'Approve', long: 'Approve the assignment' },
     { key: 'order', fn: 'F.2.5.2', actor: 'team', title: 'Order + ack', long: 'Issue and acknowledge the order' },
@@ -37,6 +37,7 @@
 
   var $ = function (id) { return document.getElementById(id); };
   var client, run, cur, view, reqs, logCache = [], checkResults = null;
+  var agentInfo = { enabled: false };
   var archMode = 'l1', archSel = 'F.2.5', traceTab = 'sr', miniTab = 'link', modelOn = true;
   try { modelOn = localStorage.getItem('rt-model-view') !== 'off'; } catch (e) { /* storage unavailable */ }
   function applyModel() {
@@ -105,13 +106,13 @@
       else st = '<span class="st ' + (t.available ? 'av-on">AVAILABLE' : 'av-off">UNAVAILABLE') + '</span>';
       var a = alt[t.id], dist = a && a.distanceKm !== null ? ' · ' + a.distanceKm + ' km' : '';
       var why = a && !isRec && a.excludedBecause.length ? '<div class="why">' + esc(a.excludedBecause.join('; ')) + '</div>' : '';
-      var ctl = ed ? '<div class="ctl"><span>Reply to status request</span><label class="switch"><input type="checkbox" data-av="' + t.id + '"' + (t.available ? ' checked' : '') + '><span class="tr"></span></label></div>' : '';
+      var ctl = ed ? '<div class="ctl"><span>Push status</span><label class="switch"><input type="checkbox" data-av="' + t.id + '"' + (t.available ? ' checked' : '') + '><span class="tr"></span></label></div>' : '';
       return '<div class="unit' + (t.available ? '' : ' off') + (isRec ? ' rec' : '') + '"><span class="av">' + t.id.slice(-1) + '</span>' +
         '<div class="nm"><span>' + esc(t.name.replace('Rescue Team ', 'Team ')) + '</span>' + st + '</div>' +
         '<div class="meta">' + esc(ZONES[t.zoneKey].name) + dist + ' · ' + t.capabilities.map(function (c) { return CAP[c]; }).join(', ') + '</div>' + why + ctl + '</div>';
     }).join('');
     $('units-foot').innerHTML = ed ? '<b style="color:var(--c-team)">Your turn:</b> switch teams on or off, then send the replies.' :
-      '<span class="mdl">Status source: <code>resource-status-source/</code> <span class="tag stub">STUB</span></span><span class="nomdl">Replies from the last status request.</span>';
+      '<span class="mdl">Status source: <code>resource-status-source/</code> <span class="tag stub">STUB</span></span><span class="nomdl">Latest status pushed by each team.</span>';
   }
 
   // ---------------- map ----------------
@@ -183,35 +184,45 @@
   var SCREENS = {
     report: function (done) {
       var r = run.report;
-      return ['<p class="say">A resident caught in the storm reports in plain words from a phone browser.</p>' +
-        '<div class="field"><label for="f-loc">Where are you?</label><input id="f-loc" type="text" autocomplete="off" value="' + esc(r ? r.location : SAMPLE.location) + '"' + (done ? ' disabled' : '') + '></div>' +
-        '<div class="field"><label for="f-desc">What help do you need?</label><textarea id="f-desc"' + (done ? ' disabled' : '') + '>' + esc(r ? r.description : SAMPLE.description) + '</textarea></div>' +
+      return ['<p class="say">A resident caught in the storm calls the emergency line. The AI voice intake agent answers at once, so there is no call queue, and transcribes the call.' +
+        '<span class="hint" style="display:block;margin-top:4px">Prototype: the call is entered as its transcript (no speech recognition yet).</span></p>' +
+        '<div class="field"><label for="f-loc">Where are you? (from the call)</label><input id="f-loc" type="text" autocomplete="off" value="' + esc(r ? r.location : SAMPLE.location) + '"' + (done ? ' disabled' : '') + '></div>' +
+        '<div class="field"><label for="f-desc">Call transcript: what help do you need?</label><textarea id="f-desc"' + (done ? ' disabled' : '') + '>' + esc(r ? r.description : SAMPLE.description) + '</textarea></div>' +
         '<div id="form-err" class="note warn" hidden></div>' +
-        (done ? '<div class="note ok"><b>Report ' + r.id + ' registered</b>' + esc(run.receipt.message) + '</div>' : ''),
-        done ? NEXT() : acts(btn('Send report', 'submit'))];
+        (done ? '<div class="note ok"><b>Report ' + r.id + ' registered and read back to the caller</b>' + esc(run.receipt.message) + '</div>' : ''),
+        done ? NEXT() : acts(btn('Place call', 'submit'))];
     },
     structure: function (done) {
       var inc = run.incident;
-      return ['<p class="say">The free text becomes a structured incident. Anything the system cannot determine is <b>flagged, never guessed</b>.</p>' +
+      if (done && inc.manual) return ['<p class="quote">“' + esc(run.report.description) + '”</p>' +
+        '<div class="note bad"><b>Manual handling<span class="mdl"> (SyRD 2.3.1, 2.3.3)</span></b>' + esc(inc.error) +
+        '. The agent’s output was withheld, so the coordinator handles this report by hand.</div>',
+        '<div class="note"><b>Nothing was dispatched</b>Restart to try another report.</div>'];
+      var ai = inc && /Claude/.test(inc.source || '');
+      return ['<p class="say">' + (agentInfo.enabled ? 'The <b>Claude rescue agent</b> reads the free text and fills a structured incident' : 'The free text becomes a structured incident') +
+        '. Anything it cannot determine is <b>flagged, never guessed</b>.</p>' +
         '<p class="quote">“' + esc(run.report.description) + '”</p>' +
-        (done ? '<div><span class="cap">Structured incident <span class="tag stub mdl">STUB</span></span>' + kv(inc) + '</div>' +
+        (done ? '<div><span class="cap">Structured incident ' + (ai ? '<span class="tag ai">CLAUDE AGENT</span>' : '<span class="tag stub mdl">STUB</span>') + '</span>' + kv(inc) + '</div>' +
           (inc.missing.length ? '<div class="note warn"><b>Flagged as missing</b>' + esc(inc.missing.join(', ')) + '</div>' : '<div class="note ok"><b>All fields determined</b>No guesses were needed.</div>') : ''),
         done ? NEXT() : acts(btn('Structure incident', 'structure'))];
     },
     status: function (done) {
       var teams = teamsNow(), n = teams.filter(function (t) { return t.available; }).length;
-      return ['<p class="say">RescuTech sends a status request to every team<span class="mdl"> (UC.1.5)</span>. The replies update current availability<span class="mdl"> (UC.1.7)</span>.</p>' +
-        '<div class="big-num"><b>' + n + '/' + teams.length + '</b><span class="hint">teams will reply “available”</span></div>' +
-        (done ? '<div class="note ok"><b>All ' + run.teams.length + ' teams replied</b>Availability is up to date.</div>'
-              : '<div class="note"><b>Try it</b>Switch a team off in the <span class="em">Rescue teams</span> list to change the recommendation.</div>'),
-        done ? NEXT() : acts(btn('Send status request and collect replies', 'status'))];
+      return ['<p class="say">Rescue teams push their status whenever it changes<span class="mdl"> (UC.1.6)</span>. RescuTech reads the latest status<span class="mdl"> (UC.1.5)</span> without waiting for replies, and asks only teams whose status is stale to refresh<span class="mdl"> (IO.3)</span>.</p>' +
+        '<div class="big-num"><b>' + n + '/' + teams.length + '</b><span class="hint">teams currently report “available”</span></div>' +
+        (done ? '<div class="note ok"><b>Latest status of ' + run.teams.length + ' teams used</b>' +
+                (run.stale && run.stale.length ? 'Refresh requested from ' + esc(run.stale.join(', ')) + '; dispatch did not wait.' : 'No status was stale, so no refresh was needed.') + '</div>'
+              : '<div class="note"><b>Try it</b>Switch a team off in the <span class="em">Rescue teams</span> list: that is the team pushing a new status.</div>'),
+        done ? NEXT() : acts(btn('Read latest team status', 'status'))];
     },
     recommend: function (done) {
       var rec = run.rec;
       if (!done) return ['<p class="say">RescuTech matches the incident against availability, capability and distance, and explains its choice.</p>', acts(btn('Generate recommendation', 'recommend'))];
       return ['<p class="say">One recommended team, <b>with its reasons</b>. The coordinator decides.</p>' +
-        '<div class="reco"><span class="cap">Recommended team <span class="tag stub mdl">STUB · rule-based</span></span><p class="nm">' + esc(rec.teamName || 'No suitable team') + '</p><ul>' +
+        '<div class="reco"><span class="cap">Recommended team <span class="tag stub mdl">' + (rec.briefing ? 'RULE-BASED CHOICE' : 'STUB · rule-based') + '</span></span><p class="nm">' + esc(rec.teamName || 'No suitable team') + '</p><ul>' +
         rec.rationale.map(function (r) { return '<li>' + esc(r) + '</li>'; }).join('') + '</ul></div>' +
+        (rec.briefing ? '<div class="note ai"><b>AI briefing <span class="tag ai">CLAUDE</span></b>' + esc(rec.briefing) +
+          '<span class="hint" style="display:block;margin-top:4px">The team is chosen by fixed rules; the agent only explains it.</span></div>' : '') +
         '<p class="hint" style="margin:0">Excluded teams show their reason in the teams list.</p>',
         rec.teamId ? NEXT('Go to approval') : '<div class="note warn"><b>No match</b>Restart and switch more teams on.</div>'];
     },
@@ -309,21 +320,26 @@
   var ACTS = {
     next: function () { return goStep(view + 1); },
     submit: function () {
-      return api('POST', '/api/distress-reports', { location: $('f-loc').value, description: $('f-desc').value }).then(function (r) {
+      return api('POST', '/api/distress-reports', { location: $('f-loc').value, transcript: $('f-desc').value, channel: 'voice' }).then(function (r) {
         if (r.status !== 201) { $('form-err').textContent = r.body.error; $('form-err').hidden = false; renderStep(); renderTabs(); return; }
         run.report = r.body.report; run.receipt = r.body.receipt; return finish('Report ' + run.report.id + ' registered');
       });
     },
     structure: function () {
-      return api('POST', '/api/distress-reports/' + run.report.id + '/incident').then(function (r) { run.incident = r.body; return finish('Incident ' + r.body.id + ' structured'); });
+      return api('POST', '/api/distress-reports/' + run.report.id + '/incident').then(function (r) {
+        if (r.status !== 201) { run.incident = { manual: true, error: r.body.error || 'Structuring failed' }; return finish('Sent to manual handling'); }
+        run.incident = r.body; return finish('Incident ' + r.body.id + ' structured');
+      });
     },
     status: function () {
       var teams = teamsNow();
-      return api('POST', '/api/incidents/' + run.incident.id + '/status-requests').then(function () {
-        return teams.reduce(function (p, t) {
-          return p.then(function () { return api('PUT', '/api/incidents/' + run.incident.id + '/team-status/' + t.id, { available: t.available, zoneKey: t.zoneKey, capabilities: t.capabilities }); });
-        }, Promise.resolve());
-      }).then(function () { return api('GET', '/api/teams'); }).then(function (r) { run.teams = r.body; run.avail = null; return finish(teams.length + ' status replies received'); });
+      // UC.1.6: teams whose switch was changed push their new status; then UC.1.5 reads the latest status.
+      return teams.reduce(function (p, t) {
+        return p.then(function () { return api('PUT', '/api/teams/' + t.id + '/status', { available: t.available, zoneKey: t.zoneKey, capabilities: t.capabilities }); });
+      }, Promise.resolve()).then(function () {
+        return api('POST', '/api/incidents/' + run.incident.id + '/status-requests');
+      }).then(function (r) { run.stale = (r.body && r.body.staleTeamIds) || []; return api('GET', '/api/teams'); })
+        .then(function (r) { run.teams = r.body; run.avail = null; return finish('Latest status of ' + teams.length + ' teams read'); });
     },
     recommend: function () {
       return api('POST', '/api/incidents/' + run.incident.id + '/recommendation').then(function (r) { run.rec = r.body; return finish(r.body.teamId ? r.body.teamName + ' recommended' : 'No suitable team'); });
@@ -549,6 +565,15 @@
     var t = $('transport');
     t.className = 'transport ' + mode;
     t.querySelector('span').textContent = mode === 'http' ? 'API · ' + location.host : 'In-page API';
-    return restart();
+    return api('GET', '/api/agent').then(function (r) {
+      agentInfo = r.body || agentInfo;
+      var a = $('agent-badge');
+      if (a) {
+        a.className = 'transport ' + (agentInfo.enabled ? 'ai' : 'local');
+        a.querySelector('span').textContent = agentInfo.enabled ? 'Claude agent · ' + agentInfo.model : 'Simulated agent (rules)';
+        a.title = agentInfo.enabled ? 'Structuring and the recommendation briefing use Claude. Budget $' + agentInfo.budgetUsd + '/month (SyRD 2.5.1).'
+                                    : 'No API key on this deployment: a keyword stub stands in for the language-model agent.';
+      }
+    }).then(restart, restart);
   });
 })();

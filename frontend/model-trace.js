@@ -7,7 +7,7 @@
   'use strict';
   var TRACE = [
     { need: 'N.1', needText: 'Citizens need to communicate their location and assistance needs without unnecessary reporting effort.',
-      sr: 'SR.1', srText: 'RescuTech shall enable a Citizen to submit a distress report containing the incident location and a description of the assistance needed.',
+      sr: 'SR.1', srText: 'RescuTech shall enable a Citizen to report an emergency by voice call, with a text form as fallback, giving the incident location and a description of the assistance needed.',
       uc: ['UC.1.1'], code: 'submitDistressReport()', stub: false, lane: 'citizen' },
     { need: 'N.2', needText: 'Citizens need to understand whether their distress report has been registered.',
       sr: 'SR.2', srText: 'RescuTech shall provide the Citizen with confirmation when their distress report has been registered.',
@@ -34,8 +34,8 @@
       sr: 'SR.9', srText: 'RescuTech shall enable the Rescue Team to acknowledge receipt of a dispatch order.',
       uc: ['UC.1.13', 'UC.1.14'], code: 'acknowledgeDispatchOrder(), recordDispatchAcknowledgment()', stub: false, lane: 'team' },
     { need: 'N.8', needText: 'Rescue Teams need to communicate their availability, location, and capabilities without unnecessary reporting effort.',
-      sr: 'SR.10', srText: 'RescuTech shall enable the Rescue Team to provide its availability, location, and capability information in response to a resource-status request.',
-      uc: ['UC.1.5', 'UC.1.6', 'UC.1.7'], code: 'requestResourceStatus(), provideResourceStatus(), getCurrentResourceAvailability() → resource-status-source', stub: true, lane: 'team' },
+      sr: 'SR.10', srText: 'RescuTech shall enable the Rescue Team to provide its availability, location, and capability information whenever it changes and in response to a status refresh request.',
+      uc: ['UC.1.5', 'UC.1.6', 'UC.1.7'], code: 'pushStatusUpdate(), retrieveLatestTeamStatus(), getCurrentResourceAvailability() → resource-status-source', stub: true, lane: 'team' },
     { need: 'N.9', needText: 'Municipal Emergency Management Agencies need to assess the system’s suitability for intended use using clear information about its capabilities, limitations, and operating responsibilities.',
       sr: 'SR.11', srText: 'The RescuTech prototype delivery shall include documentation describing its intended use, supported capabilities, known limitations, and allocation of operating responsibilities for assessment by the Municipal Emergency Management Agency.',
       uc: [], code: 'README.md (Intended use, Limitations, Responsibilities)', stub: false, lane: 'delivery' },
@@ -48,7 +48,7 @@
     'SR.3': 'POST /api/distress-reports/:id/incident', 'SR.4': 'POST /api/incidents/:id/recommendation',
     'SR.5': 'POST /api/incidents/:id/recommendation', 'SR.6': 'POST /api/recommendations/:id/dispatch-order',
     'SR.7': 'GET /api/dispatch-orders/:id/status', 'SR.8': 'POST /api/recommendations/:id/dispatch-order',
-    'SR.9': 'POST /api/dispatch-orders/:id/acknowledgment', 'SR.10': 'PUT /api/incidents/:id/team-status/:teamId',
+    'SR.9': 'POST /api/dispatch-orders/:id/acknowledgment', 'SR.10': 'PUT /api/teams/:teamId/status',
     'SR.11': '—', 'SR.12': 'npm test'
   };
   TRACE.forEach(function (t) { t.api = API[t.sr]; });
