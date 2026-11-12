@@ -4,6 +4,8 @@
  *   Outputs: IO.11 Incident Resource Needs (to F.2.3); IO.12 Structured Incident (to F.2.4)
  *   Satisfies: 2.3.1, 2.3.3   UC.1 step: UC.1.4
  * Contract operation (contracts/api-v1.yaml): structureIncident(RegisteredReport) -> 201 StructuringResult | 422 Error
+ * Mechanism S.1.2: the Claude agent (incident-structuring-agent/agent.js) when the server has an API key, otherwise the
+ * keyword stub. The agent runs before this call (it is asynchronous) and its output is validated here exactly like the stub's.
  */
 (function (root) {
   'use strict';
@@ -27,10 +29,11 @@
     var incidents = {};
 
     // Contract: structureIncident — IO.10 in; IO.11 and IO.12 out
-    function structureIncident(registeredReport) {
-      var structured = Structurer.structure({ location: registeredReport.location, description: registeredReport.description });
+    // agentOutput (optional): what the Claude agent returned for this report; { invalid: reason } if the call failed.
+    function structureIncident(registeredReport, agentOutput) {
+      var structured = agentOutput || Structurer.structure({ location: registeredReport.location, description: registeredReport.description });
       var id = ctx.nextId('I');
-      var reason = invalidReason(structured);
+      var reason = structured && structured.invalid ? structured.invalid : invalidReason(structured);
       if (reason) {
         incidents[id] = { id: id, reportId: registeredReport.reportId, status: 'MANUAL_HANDLING', missing: ['model output invalid'] };
         ctx.log('UC.1.4', 'RescuTech', 'Incident ' + id + ' needs manual handling: model output invalid (' + reason + ').', ['2.3.1', '2.3.3'], 'warn');
@@ -39,7 +42,7 @@
       var incident = Object.assign({ id: id, reportId: registeredReport.reportId, status: 'STRUCTURED' }, structured);
       incidents[id] = incident;
       var missingNote = incident.missing.length ? ' Missing fields flagged: ' + incident.missing.join(', ') + '.' : '';
-      ctx.log('UC.1.4', 'RescuTech', 'Incident ' + id + ' structured from ' + registeredReport.reportId + ' [stub].' + missingNote,
+      ctx.log('UC.1.4', 'RescuTech', 'Incident ' + id + ' structured from ' + registeredReport.reportId + (agentOutput ? ' [' + (structured.source || 'agent') + '].' : ' [stub].') + missingNote,
               ['SR.3', 'N.3'], incident.missing.length ? 'warn' : 'ok');
       return {
         status: 201,

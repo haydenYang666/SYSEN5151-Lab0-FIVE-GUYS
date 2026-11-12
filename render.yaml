@@ -1,0 +1,20 @@
+# Render Blueprint: deploys the RescuTech server (front end + REST API + Claude agent) as one web service.
+# In the Render dashboard: New > Blueprint > pick this repository, then set ANTHROPIC_API_KEY yourself
+# (it is never stored in the repository). Without the key the service runs with the keyword stub.
+services:
+  - type: web
+    name: rescutech
+    runtime: node
+    plan: free
+    buildCommand: "true"
+    startCommand: node rescutech-orchestrator/server.js
+    healthCheckPath: /api/health
+    envVars:
+      - key: ANTHROPIC_API_KEY
+        sync: false
+      - key: RESCUTECH_MODEL
+        value: claude-haiku-4-5
+      - key: RESCUTECH_BUDGET_USD
+        value: "50"
+      - key: RESCUTECH_MAX_CALLS_PER_MIN
+        value: "20"
