@@ -1,0 +1,62 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#0a1022">
+<title>RescuTech Emergency Call</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@500&display=swap">
+<link rel="stylesheet" href="caller-phone.css">
+<style>
+  /* Citizen side (X.1 · Interface 1). Full screen on a phone; a phone-sized frame on a laptop. */
+  html, body { margin: 0; height: 100%; background: #050914; }
+  body { display: flex; align-items: center; justify-content: center; font-family: "Inter", system-ui, sans-serif; }
+  .wrap { width: 100%; height: 100%; display: flex; flex-direction: column; }
+  .wrap .cp-phone { flex: 1; min-height: 0; padding-top: env(safe-area-inset-top); padding-bottom: env(safe-area-inset-bottom); }
+  .banner { margin: 0; padding: 8px 14px; font-size: 12px; line-height: 1.4; color: #ffd28a; background: #2a1c05; border-bottom: 1px solid #5a3d0a; }
+  .banner code { font-family: "JetBrains Mono", monospace; }
+  @media (min-width: 600px) {
+    .wrap { width: 390px; height: min(820px, 94vh); border-radius: 40px; padding: 10px; background: #02060f; box-shadow: 0 0 0 1px rgba(140,170,255,.25), 0 30px 80px -20px #000; }
+    .wrap .cp-phone { border-radius: 32px; overflow: hidden; padding: 0; }
+    .banner { border-radius: 24px 24px 0 0; }
+  }
+</style>
+</head>
+<body>
+<main class="wrap">
+  <p class="banner" id="banner" hidden></p>
+  <div class="cp-phone" id="phone" aria-label="Emergency call"></div>
+</main>
+<script src="caller-phone.js"></script>
+<script>
+/* Registers the call through the RescuTech API (POST /api/distress-reports), the same route the console uses.
+   Needs the server (npm start): the dispatch console on the laptop picks the call up from the event log. */
+(function () {
+  'use strict';
+  var banner = document.getElementById('banner');
+  var online = false;
+  function note(html) { banner.innerHTML = html; banner.hidden = false; }
+  var ready = /^https?:/.test(location.protocol)
+    ? fetch('/api/health').then(function (r) { return r.ok ? r.json() : null; }).then(function (j) { online = !!(j && j.ok); }).catch(function () { online = false; })
+    : Promise.resolve();
+  ready.then(function () {
+    if (!online) note('Not connected to a RescuTech server. Start it on the laptop with <code>npm start</code> and open <code>http://&lt;laptop-address&gt;:3000/frontend/caller.html</code> on a phone on the same network.');
+  });
+  window.RescuTechCallerPhone.mount(document.getElementById('phone'), {
+    location: '412 Fall Creek Dr, Fall Creek, Ithaca',
+    description: 'Our car is stuck on a snow-blocked road. Two adults inside, one is shivering badly and may have hypothermia.',
+    allowNewCall: true,
+    register: function (loc, desc) {
+      return ready.then(function () {
+        if (!online) return { ok: false, error: 'The emergency line is not reachable from this page (no RescuTech server).' };
+        return fetch('/api/distress-reports', { method: 'POST', headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ location: loc, transcript: desc, channel: 'voice' }) })
+          .then(function (r) { return r.json().then(function (b) { return r.status === 201 ? { ok: true, report: b.report, receipt: b.receipt } : { ok: false, error: b.error || 'Registration failed' }; }); });
+      });
+    }
+  });
+})();
+</script>
+</body>
+</html>

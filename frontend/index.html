@@ -6,72 +6,92 @@
 <title>RescuTech Dispatch</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;700&display=swap">
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" crossorigin="">
 <link rel="stylesheet" href="styles.css">
+<link rel="stylesheet" href="theme-command.css">
+<link rel="stylesheet" href="caller-phone.css">
 </head>
-<body>
+<body class="cmd">
 <!--APP-->
 <header class="topbar">
   <div class="brand">
     <span class="logo" aria-hidden="true"><svg viewBox="0 0 20 20" fill="none" stroke="#fff" stroke-width="2.4" stroke-linecap="round"><path d="M10 3v14M3 10h14"/></svg></span>
-    <div><b>RescuTech</b><small>Disaster Response Agent Orchestrator · Tompkins County snowstorm (simulated)</small></div>
+    <div><b>RescuTech <span class="brand-sub">Dispatch</span></b><small>Tompkins County · Winter storm operations · SIMULATION</small></div>
   </div>
-  <nav class="tabs" role="tablist" aria-label="Views">
-    <button type="button" role="tab" id="tab-demo" aria-selected="true" data-view="demo">Operate</button>
-    <button type="button" role="tab" id="tab-arch" aria-selected="false" data-view="arch">Architecture</button>
-    <button type="button" role="tab" id="tab-trace" aria-selected="false" data-view="trace">Traceability</button>
-  </nav>
+  <div class="top-title" aria-hidden="true"><span>Emergency Dispatch Command</span></div>
+  <div class="ops-status" aria-live="polite">
+    <span class="live"><i></i>LIVE</span>
+    <span class="clock" id="clock">--:--:--</span>
+    <span class="elapsed" id="elapsed" title="Time since the call was registered">No active call</span>
+  </div>
   <div class="top-right">
     <span class="transport" id="transport"><i></i><span>Connecting…</span></span>
     <span class="transport local" id="agent-badge"><i></i><span>Agent…</span></span>
-    <button type="button" class="mtoggle" id="btn-model" aria-pressed="true" title="Show function / asset / requirement IDs from the Innoslate model"><span class="sw"></span>Model view</button>
-    <button type="button" class="btn ghost sm" id="btn-restart">Restart</button>
+    <button type="button" class="mtoggle" id="btn-model" aria-pressed="false" title="Show the Innoslate system model, traceability and function / requirement IDs (for grading)"><span class="sw"></span>Model view</button>
+    <button type="button" class="btn ghost sm" id="btn-restart">New incident</button>
   </div>
 </header>
+<nav class="tabs mdl" role="tablist" aria-label="Views">
+  <button type="button" role="tab" id="tab-demo" aria-selected="true" data-view="demo">Dispatch</button>
+  <button type="button" role="tab" id="tab-arch" aria-selected="false" data-view="arch">System model</button>
+  <button type="button" role="tab" id="tab-trace" aria-selected="false" data-view="trace">Traceability</button>
+</nav>
 
 <main id="main" class="ops-main">
-  <!-- OPERATE: guided lane, teams | map | action + log -->
+  <!-- DISPATCH: KPI strip · incident queue + activity | map + unit board | incident card -->
   <section id="view-demo" class="view" role="tabpanel" aria-labelledby="tab-demo">
-    <nav class="panel lane" id="lane" aria-label="UC.1 workflow"></nav>
-    <div class="ops-grid">
-      <aside class="panel units" id="units-panel">
-        <div class="panel-h"><h2>Rescue teams<span class="mdl"> · X.3</span></h2><span class="hint" id="units-sum"></span></div>
-        <div class="units-list" id="units"></div>
-        <div class="units-foot" id="units-foot"></div>
+    <div class="kpis" id="kpis"></div>
+    <div class="cad-grid">
+      <aside class="panel queue">
+        <div class="ph"><span class="ph-ic" aria-hidden="true"></span><h2>Incidents</h2><span class="hint" id="q-sum"></span></div>
+        <div class="queue-list" id="queue"></div>
+        <div class="ph"><span class="ph-ic" aria-hidden="true"></span><h2>Activity</h2>
+          <div class="mtabs" role="tablist" id="mtabs">
+            <button type="button" role="tab" data-mt="log" aria-selected="true">Log<span class="n" id="n-log">0</span></button>
+            <button type="button" role="tab" data-mt="api" aria-selected="false" class="mdl">API<span class="n" id="n-api">0</span></button>
+            <button type="button" role="tab" data-mt="link" aria-selected="false">Model</button>
+          </div>
+        </div>
+        <div class="tab-body" id="tab-body"></div>
       </aside>
 
       <section class="panel map-panel" aria-label="Incident map">
+        <div class="ph map-ph"><span class="ph-ic" aria-hidden="true"></span><h2>Operations map</h2><span class="hint">Tompkins County, NY</span></div>
+        <div id="lmap" class="lmap" aria-label="Map of Tompkins County"></div>
         <svg id="map" viewBox="24 18 590 440" preserveAspectRatio="xMidYMid meet" role="img" aria-label="Simulated incident map of Tompkins County"></svg>
-        <div class="chips" id="metrics"></div>
+        <aside class="phone-wrap open" id="phone-wrap" aria-label="Caller phone (simulated citizen, Interface 1)">
+          <div class="phone-frame"><div class="cp-phone" id="phone"></div></div>
+          <button type="button" class="phone-tab" id="phone-tab" aria-expanded="true">Hide caller phone</button>
+        </aside>
+        <div class="map-info" id="map-info" aria-live="polite" hidden></div>
         <div class="legend">
-          <span><i style="background:var(--accent)"></i>Incident</span>
-          <span><i style="background:var(--c-team)"></i>Available</span>
-          <span><i style="background:#a3adbb"></i>Unavailable</span>
-          <span><i style="background:#fff;box-shadow:0 0 0 2.5px var(--gold) inset"></i>Recommended</span>
+          <span><i class="lg inc"></i>Incident</span>
+          <span><i class="lg av"></i>Available</span>
+          <span><i class="lg off"></i>Out of service</span>
+          <span><i class="lg rec"></i>Recommended</span>
+          <span><i class="lg disp"></i>Dispatched</span>
         </div>
-        <span class="sim">Simulated km grid · fictional teams</span>
+        <span class="sim">Unit positions simulated · fictional units</span>
         <div class="toasts" id="toasts" aria-live="polite"></div>
       </section>
 
-      <div class="col">
-        <article class="panel step-card" id="step-card">
-          <div class="step-top" id="step-top"></div>
-          <div class="step-body" id="stage"></div>
-          <div class="step-foot" id="foot"></div>
-        </article>
-        <article class="panel tabs-card">
-          <div class="mtabs" role="tablist" id="mtabs">
-            <button type="button" role="tab" data-mt="link" aria-selected="true">Model link</button>
-            <button type="button" role="tab" data-mt="log" aria-selected="false">Event log<span class="n" id="n-log">0</span></button>
-            <button type="button" role="tab" data-mt="api" aria-selected="false">API<span class="n" id="n-api">0</span></button>
-          </div>
-          <div class="tab-body" id="tab-body"></div>
-        </article>
-      </div>
+      <section class="panel board" id="units-panel">
+        <div class="ph"><span class="ph-ic" aria-hidden="true"></span><h2>Unit status<span class="mdl"> · X.3</span></h2><span class="hint" id="units-sum"></span><span class="ph-note" id="units-foot"></span></div>
+        <div class="board-scroll"><table class="ub"><thead id="units-head"></thead><tbody id="units"></tbody></table></div>
+      </section>
+
+      <article class="panel inc-card" id="step-card" aria-label="Incident">
+        <div class="ph"><span class="ph-ic" aria-hidden="true"></span><h2>Incident</h2><span class="hint" id="inc-sub"></span></div>
+        <div class="inc-head" id="step-top"></div>
+        <ol class="life" id="lane" aria-label="Incident status"></ol>
+        <div class="inc-body" id="stage"></div>
+        <div class="inc-actions" id="foot"></div>
+      </article>
     </div>
   </section>
 
   <!-- ARCHITECTURE -->
-  <section id="view-arch" class="view" role="tabpanel" aria-labelledby="tab-arch" hidden>
+  <section id="view-arch" class="view light" role="tabpanel" aria-labelledby="tab-arch" hidden>
     <div class="arch-grid">
       <article class="card">
         <div class="card-h">
@@ -90,7 +110,7 @@
   </section>
 
   <!-- TRACEABILITY -->
-  <section id="view-trace" class="view" role="tabpanel" aria-labelledby="tab-trace" hidden>
+  <section id="view-trace" class="view light" role="tabpanel" aria-labelledby="tab-trace" hidden>
     <article class="card">
       <div class="trace-head">
         <div><h2 style="font-size:16px">Need → requirement → model → code → check</h2>
@@ -107,8 +127,9 @@
   </section>
 </main>
 
-<footer class="foot">SYSEN 5151 · Team 15 FIVE GUYS · coursework prototype. Recommendations are advisory; every dispatch needs Emergency Coordinator approval.</footer>
+<footer class="foot cmd-foot">SYSEN 5151 · Team 15 FIVE GUYS · coursework prototype. Recommendations are advisory; every dispatch needs Emergency Coordinator approval.</footer>
 <!--/APP-->
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" crossorigin=""></script>
 <script src="../incident-structuring-agent/agent.stub.js"></script>
 <script src="../resource-status-source/teams.stub.js"></script>
 <script src="../rescutech-orchestrator/functions/common.js"></script>
@@ -127,6 +148,7 @@
 <script src="model-trace.js"></script>
 <script src="model-architecture.js"></script>
 <script src="api-client.js"></script>
+<script src="caller-phone.js"></script>
 <script src="app.js"></script>
 </body>
 </html>

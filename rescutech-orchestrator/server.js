@@ -49,4 +49,9 @@ http.createServer(function (req, res) {
   var a = agent.status();
   console.log('RescuTech running at http://localhost:' + PORT + ' · structuring: ' +
               (a.enabled ? 'Claude agent (' + a.model + '), budget $' + a.budgetUsd + '/month' : 'keyword stub (set ANTHROPIC_API_KEY to use Claude)'));
+  // Caller phone (X.1): open this on a phone on the same network.
+  var nets = require('os').networkInterfaces();
+  Object.keys(nets).forEach(function (n) {
+    nets[n].forEach(function (i) { if (i.family === 'IPv4' && !i.internal) console.log('Caller phone: http://' + i.address + ':' + PORT + '/frontend/caller.html'); });
+  });
 });

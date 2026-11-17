@@ -1,0 +1,55 @@
+/* Caller phone (X.1 Citizen · Interface 1). Shared by the console (embedded) and caller.html (real phone). */
+.cp-phone {
+  --cp-bg: #0a1022; --cp-ink: #eef3ff; --cp-muted: #8d9bbd; --cp-line: rgba(140,170,255,.18);
+  --cp-me: #2f7bff; --cp-ai: #1b2440; --cp-ok: #2ee08a; --cp-bad: #ff5d6a;
+  display: flex; flex-direction: column; min-height: 0; color: var(--cp-ink); background: linear-gradient(180deg, #111a36, var(--cp-bg));
+  font: 14px/1.45 "Inter", "Segoe UI", system-ui, -apple-system, sans-serif;
+}
+.cp-phone * { box-sizing: border-box; }
+.cp-status { display: flex; justify-content: space-between; align-items: center; padding: 8px 18px 4px; font-size: 12px; font-weight: 600; flex: none; }
+.cp-sig { display: inline-flex; gap: 2px; align-items: flex-end; height: 10px; }
+.cp-sig i { width: 3px; background: var(--cp-ink); border-radius: 1px; }
+.cp-sig i:nth-child(1) { height: 4px; } .cp-sig i:nth-child(2) { height: 6px; } .cp-sig i:nth-child(3) { height: 8px; } .cp-sig i:nth-child(4) { height: 10px; }
+
+.cp-idle { flex: 1; min-height: 0; overflow: auto; display: flex; flex-direction: column; gap: 10px; padding: 8px 16px 14px; }
+.cp-line { text-align: center; padding: 6px 0 4px; }
+.cp-line b { display: block; font-size: 22px; letter-spacing: -.01em; color: #ff6b76; }
+.cp-line span { font-size: 12px; color: var(--cp-muted); }
+.cp-f { display: grid; gap: 4px; }
+.cp-f span { font-size: 11px; font-weight: 700; letter-spacing: .06em; text-transform: uppercase; color: var(--cp-muted); }
+.cp-f input, .cp-f textarea { font: inherit; font-size: 14px; color: var(--cp-ink); background: rgba(255,255,255,.06); border: 1px solid var(--cp-line); border-radius: 12px; padding: 9px 11px; width: 100%; }
+.cp-f textarea { min-height: 92px; resize: vertical; }
+.cp-f input:focus, .cp-f textarea:focus { outline: 2px solid var(--cp-me); outline-offset: 1px; }
+.cp-call, .cp-end { align-self: center; width: 62px; height: 62px; border-radius: 50%; border: 0; display: grid; place-items: center; cursor: pointer; flex: none; margin-top: 4px; }
+.cp-call { background: #22c55e; box-shadow: 0 8px 24px -8px rgba(34,197,94,.9); }
+.cp-call:hover { filter: brightness(1.08); }
+.cp-call:focus-visible, .cp-again:focus-visible { outline: 3px solid #fff; outline-offset: 3px; }
+.cp-call svg, .cp-end svg { width: 28px; height: 28px; fill: #fff; }
+.cp-end { background: var(--cp-bad); margin: 8px auto 14px; opacity: .9; cursor: default; }
+.cp-note { margin: 0; font-size: 11px; color: var(--cp-muted); text-align: center; }
+.cp-err { margin: 0; padding: 8px 10px; border-radius: 10px; background: rgba(255,93,106,.15); color: #ff9aa2; font-size: 12.5px; }
+
+.cp-head { display: flex; align-items: center; gap: 10px; padding: 8px 14px 10px; border-bottom: 1px solid var(--cp-line); flex: none; }
+.cp-head b { display: block; font-size: 14px; }
+.cp-head span { font-size: 11.5px; color: var(--cp-muted); }
+.cp-av { width: 34px; height: 34px; border-radius: 50%; display: grid; place-items: center; font-size: 12px; font-weight: 800; flex: none;
+  background: linear-gradient(135deg, #ffb02e, #ff7a1a); color: #1d1200 !important; }
+.cp-timer { margin-left: auto; font-family: "JetBrains Mono", ui-monospace, monospace; font-size: 12.5px; color: var(--cp-ok) !important; }
+.cp-chat { flex: 1; min-height: 0; overflow: auto; padding: 12px; display: flex; flex-direction: column; gap: 8px; }
+.cp-b { max-width: 86%; padding: 8px 11px; border-radius: 14px; font-size: 13px; line-height: 1.4; }
+.cp-chat > .cp-b:last-child { animation: cpin .18s ease-out; }
+.cp-b.ai { align-self: flex-start; background: var(--cp-ai); border: 1px solid var(--cp-line); border-bottom-left-radius: 4px; }
+.cp-b.me { align-self: flex-end; background: var(--cp-me); border-bottom-right-radius: 4px; }
+.cp-who { display: block; font-size: 10px; font-weight: 700; letter-spacing: .06em; text-transform: uppercase; opacity: .7; margin-bottom: 2px; }
+.cp-b.typing { display: inline-flex; gap: 4px; padding: 11px 12px; }
+.cp-b.typing i { width: 6px; height: 6px; border-radius: 50%; background: var(--cp-muted); animation: cpdot 1s infinite; }
+.cp-b.typing i:nth-child(2) { animation-delay: .15s; } .cp-b.typing i:nth-child(3) { animation-delay: .3s; }
+@keyframes cpdot { 0%, 60%, 100% { opacity: .3; transform: translateY(0); } 30% { opacity: 1; transform: translateY(-3px); } }
+@keyframes cpin { from { opacity: 0; transform: translateY(4px); } }
+.cp-receipt { margin: 0 12px 10px; padding: 10px 12px; border-radius: 12px; background: rgba(46,224,138,.12); border: 1px solid rgba(46,224,138,.35); flex: none; }
+.cp-receipt.bad { background: rgba(255,93,106,.12); border-color: rgba(255,93,106,.4); }
+.cp-receipt b { display: block; font-family: "JetBrains Mono", ui-monospace, monospace; font-size: 18px; }
+.cp-receipt p { margin: 2px 0 0; font-size: 12px; color: var(--cp-muted); }
+.cp-k { font-size: 10.5px; font-weight: 700; letter-spacing: .08em; text-transform: uppercase; color: var(--cp-ok); }
+.cp-receipt.bad .cp-k { color: var(--cp-bad); }
+.cp-again { margin: 0 12px 14px; padding: 11px; border-radius: 12px; border: 1px solid var(--cp-line); background: rgba(255,255,255,.06); color: var(--cp-ink); font: inherit; font-weight: 600; cursor: pointer; flex: none; }
