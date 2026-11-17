@@ -1,9 +1,9 @@
 /*
  * RescuTech front end (Interfaces 1, 3 and 4). Every action calls the S.1 REST API in
  * rescutech-orchestrator/routes.js; no business rules live here.
- *   Operate       — dispatch-console layout: guided UC.1 lane on top (grouped by function F.2.x / asset S.1.x),
- *                   rescue teams on the left, incident map in the centre, the current action and the
- *                   model link / event log on the right.
+ *   Dispatch      — CAD-style console: KPI strip; incident queue and activity log (left); map and unit
+ *                   status board (centre); one incident card that grows as the call is worked, with the
+ *                   next action at its foot (right). Model view adds the Innoslate IDs and the two tabs below.
  *   Architecture  — level-1 IDEF0 (F.2 with mechanisms S.1.1–S.1.5), level-2 IDEF0 (F.2.5 with S.1.5.1–S.1.5.4)
  *                   and the S.1 asset hierarchy; each element links to its code and to the step where it runs.
  *   Traceability  — SRD.1 and S.1.5 CRD requirements to model step, code and checks.
@@ -13,20 +13,20 @@
 
   var A = window.RESCUTECH_ARCH, EL = A.EL;
   var ACTOR = {
-    cit: { name: 'Citizen', iface: '<span class="mdl">X.1 · Interface 1 · </span>phone', ab: 'X.1' },
-    sys: { name: 'RescuTech', iface: '<span class="mdl">S.1 · </span>system of interest', ab: 'S.1' },
-    coord: { name: 'Emergency Coordinator', iface: '<span class="mdl">X.2 · Interface 3 · </span>console', ab: 'X.2' },
-    team: { name: 'Rescue Team', iface: '<span class="mdl">X.3 · Interface 4 · </span>tablet', ab: 'X.3' }
+    cit: { name: 'Caller', iface: '<span class="mdl">X.1 · Interface 1 · </span>phone call', ab: 'CALL' },
+    sys: { name: 'RescuTech AI', iface: '<span class="mdl">S.1 · </span>automated', ab: 'AI' },
+    coord: { name: 'Emergency Coordinator', iface: '<span class="mdl">X.2 · Interface 3 · </span>dispatch console', ab: 'COORD' },
+    team: { name: 'Rescue Team', iface: '<span class="mdl">X.3 · Interface 4 · </span>field tablet', ab: 'UNIT' }
   };
   var LOG_ACTOR = { 'Citizen': 'cit', 'RescuTech': 'sys', 'Coordinator': 'coord', 'Rescue Team': 'team' };
   var STEPS = [
-    { key: 'report', fn: 'F.2.1', actor: 'cit', title: 'Call', long: 'Call the emergency line' },
-    { key: 'structure', fn: 'F.2.2', actor: 'sys', title: 'Structure', long: 'Structure the incident' },
-    { key: 'status', fn: 'F.2.3', actor: 'team', title: 'Team status', long: 'Read latest team status' },
-    { key: 'recommend', fn: 'F.2.4', actor: 'coord', title: 'Recommend', long: 'Recommend a team' },
-    { key: 'approve', fn: 'F.2.5.1', actor: 'coord', title: 'Approve', long: 'Approve the assignment' },
-    { key: 'order', fn: 'F.2.5.2', actor: 'team', title: 'Order + ack', long: 'Issue and acknowledge the order' },
-    { key: 'final', fn: 'F.2.5.4', actor: 'coord', title: 'Status', long: 'Review dispatch status' }
+    { key: 'report', fn: 'F.2.1', actor: 'cit', title: 'Incoming call', long: 'Incoming emergency call', who: ['Caller', 'cit'] },
+    { key: 'structure', fn: 'F.2.2', actor: 'sys', title: 'AI triage', long: 'AI triage of the call', who: ['AI agent', 'ai'] },
+    { key: 'status', fn: 'F.2.3', actor: 'team', title: 'Unit status', long: 'Check live unit status', who: ['Units', 'team'] },
+    { key: 'recommend', fn: 'F.2.4', actor: 'coord', title: 'Recommend', long: 'Recommend a unit', who: ['AI + rules', 'ai'] },
+    { key: 'approve', fn: 'F.2.5.1', actor: 'coord', title: 'Approve', long: 'Coordinator approval', who: ['Coordinator', 'hu'] },
+    { key: 'order', fn: 'F.2.5.2', actor: 'team', title: 'Dispatch', long: 'Dispatch and acknowledge', who: ['Unit', 'team'] },
+    { key: 'final', fn: 'F.2.5.4', actor: 'coord', title: 'Confirmed', long: 'Dispatch confirmed', who: ['Coordinator', 'hu'] }
   ];
   var SAMPLE = {
     location: '412 Fall Creek Dr, Fall Creek, Ithaca',
@@ -38,8 +38,8 @@
   var $ = function (id) { return document.getElementById(id); };
   var client, run, cur, view, reqs, logCache = [], checkResults = null;
   var agentInfo = { enabled: false };
-  var archMode = 'l1', archSel = 'F.2.5', traceTab = 'sr', miniTab = 'link', modelOn = true;
-  try { modelOn = localStorage.getItem('rt-model-view') !== 'off'; } catch (e) { /* storage unavailable */ }
+  var archMode = 'l1', archSel = 'F.2.5', traceTab = 'sr', miniTab = 'log', modelOn = false;
+  try { modelOn = localStorage.getItem('rt-model-view') === 'on'; } catch (e) { /* storage unavailable */ }
   function applyModel() {
     document.body.classList.toggle('model-off', !modelOn);
     $('btn-model').setAttribute('aria-pressed', String(modelOn));
@@ -71,17 +71,69 @@
     return DONE[id] && DONE[id]() ? 'done' : '';
   }
 
-  // ---------------- guided lane ----------------
-  function node(i, last) {
-    var s = STEPS[i], st = i === view ? 'cur' : (run.done[i] ? 'done' : '');
-    var fid = s.key === 'order' ? 'F.2.5.2–3' : s.fn, asset = s.key === 'order' ? 'S.1.5.2–3' : EL[s.fn].asset;
-    return '<button type="button" class="node ' + st + (last ? ' last' : '') + '" data-step="' + i + '" style="' + vars(s.actor) + '"' + (i > cur ? ' disabled' : '') + '>' +
-      '<span class="dot">' + (run.done[i] && i !== view ? '✓' : i + 1) + '</span><span class="lbl">' + esc(s.title) + '</span>' +
-      '<span class="fn mdl">' + fid + ' · ' + asset + '</span></button>';
-  }
+  // ---------------- incident state (CAD-style status bar, queue and KPI strip) ----------------
+  var LIFE = [
+    ['Received', 'F.2.1', function () { return !!run.report; }],
+    ['Triaged', 'F.2.2', function () { return !!(run.incident && !run.incident.manual); }],
+    ['Units', 'F.2.3', function () { return !!run.done[2]; }],
+    ['Recommend', 'F.2.4', function () { return !!(run.rec && run.rec.teamId); }],
+    ['Approved', 'F.2.5.1', function () { return !!run.approval; }],
+    ['Dispatched', 'F.2.5.2', function () { return !!run.order; }],
+    ['Ack', 'F.2.5.3', function () { return !!run.ackd; }]
+  ];
   function renderLane() {
-    $('lane').innerHTML = '<div class="solo">' + node(0) + '</div><div class="solo">' + node(1) + '</div><div class="solo">' + node(2) + '</div><div class="solo">' + node(3) + '</div>' +
-      '<div class="grp" data-label="F.2.5 Manage Dispatch Orders · S.1.5 Dispatch Management Subsystem">' + node(4) + node(5) + node(6, true) + '</div>';
+    var curI = -1;
+    $('lane').innerHTML = LIFE.map(function (s, i) {
+      var d = s[2](); if (!d && curI < 0) curI = i;
+      return '<li class="' + (d ? 'done' : curI === i ? 'cur' : '') + '"><i></i><span>' + s[0] + '</span><small class="mdl">' + s[1] + '</small></li>';
+    }).join('');
+  }
+  function incState() {
+    if (!run.report) return null;
+    if (run.incident && run.incident.manual) return ['MANUAL', 'bad'];
+    if (run.ackd) return ['ACKNOWLEDGED', 'ok'];
+    if (run.order) return ['DISPATCHED', 'disp'];
+    if (run.approval) return ['APPROVED', 'rec'];
+    if (run.rec) return run.rec.teamId ? ['AWAITING APPROVAL', 'rec'] : ['NO UNIT', 'bad'];
+    if (run.incident) return ['TRIAGED', 'info'];
+    return ['PENDING', 'warn'];
+  }
+  function prio() { var u = run.incident && !run.incident.manual && run.incident.urgency; return u === 'High' ? ['P1', 'p1', 'High'] : u ? ['P2', 'p2', u] : ['P–', 'p0', 'Not triaged']; }
+  function repLoc() { return run.report.location || 'Location from the call · pending triage'; }
+  function incNo() { return (run.incident && run.incident.id) || run.report.id; }
+  function nature() { return run.incident && !run.incident.manual ? (run.incident.assistanceNeeded || 'Assistance needed') : run.incident ? 'Manual handling' : 'Awaiting triage'; }
+  function recDist() { var r = run.rec; if (!r || !r.teamId) return null; var a = r.alternatives.filter(function (x) { return x.teamId === r.teamId; })[0]; return a ? a.distanceKm : null; }
+  function renderQueue() {
+    var st = incState();
+    $('q-sum').textContent = st ? '1 active' : 'Queue clear';
+    if (!st) { $('queue').innerHTML = '<div class="q-empty"><b>No active incidents</b><span>Waiting for the next call…</span></div>'; return; }
+    var p = prio();
+    $('queue').innerHTML = '<div class="q-row sel"><span class="prio ' + p[1] + '" title="Priority: ' + esc(p[2]) + '">' + p[0] + '</span><div class="q-main">' +
+      '<div class="q-top"><b class="mono">' + esc(incNo()) + '</b><span class="q-time mono" id="q-elapsed">--:--</span></div>' +
+      '<div class="q-nat">' + esc(nature()) + '</div><div class="q-loc">' + esc(repLoc()) + '</div>' +
+      '<span class="q-st ' + st[1] + '">' + st[0] + '</span></div></div>';
+  }
+  var ICON = {
+    inc: '<path d="M12 3 2.5 20h19L12 3z"/><path d="M12 10v4M12 17h.01"/>',
+    unit: '<path d="M3 16V8h11v8M14 11h4l3 3v2h-7"/><circle cx="7" cy="17" r="2"/><circle cx="17" cy="17" r="2"/>',
+    time: '<circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/>',
+    disp: '<path d="M4 12h12M12 6l6 6-6 6"/><path d="M20 4v16"/>'
+  };
+  function kpi(ic, label, value, sub, cls) {
+    return '<div class="kpi ' + (cls || '') + '"><span class="k-ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">' + ICON[ic] + '</svg></span>' +
+      '<div><span class="k-l">' + label + '</span><b class="k-v">' + value + '</b><span class="k-s">' + sub + '</span></div></div>';
+  }
+  function ring(a, n) {
+    var C = 2 * Math.PI * 15, f = n ? a / n : 0;
+    return '<svg class="k-ring" viewBox="0 0 36 36" aria-hidden="true"><circle cx="18" cy="18" r="15" class="bg"/><circle cx="18" cy="18" r="15" class="fg" stroke-dasharray="' + (C * f).toFixed(1) + ' ' + C.toFixed(1) + '"/></svg>';
+  }
+  function renderKpis() {
+    var teams = teamsNow(), av = teams.filter(function (t) { return t.available; }).length, st = incState(), d = recDist();
+    $('kpis').innerHTML =
+      kpi('inc', 'Active incidents', st ? '1' : '0', st ? (prio()[0] + ' · ' + esc(nature())) : 'Queue clear', st ? 'hot' : '') +
+      '<div class="kpi">' + ring(av, teams.length) + '<div><span class="k-l">Units available</span><b class="k-v">' + av + '<small>/' + teams.length + '</small></b><span class="k-s">' + (teams.length - av) + ' out of service</span></div></div>' +
+      kpi('time', 'Call timer', '<span id="k-timer">--:--</span>', run.ackd ? 'Call to acknowledgment' : st ? 'Since call registered' : 'No active call', st && !run.ackd ? 'warn' : '') +
+      kpi('disp', 'Dispatch', st ? st[0].charAt(0) + st[0].slice(1).toLowerCase() : '—', d !== null ? 'Nearest suitable unit ' + d + ' km' : 'No unit assigned', run.ackd ? 'ok' : '');
   }
 
   // ---------------- teams panel ----------------
@@ -93,31 +145,183 @@
     });
   }
   function editable() { return STEPS[view].key === 'status' && !run.done[2]; }
+  function unitCode(t) {
+    var isRec = run.rec && run.rec.teamId === t.id;
+    if (isRec && run.ackd) return ['ACK', 'ok', 'Order acknowledged'];
+    if (isRec && run.order) return ['DISP', 'disp', 'Dispatched, awaiting acknowledgment'];
+    if (isRec) return ['REC', 'rec', 'Recommended'];
+    return t.available ? ['AVAIL', 'av', 'Available'] : ['OOS', 'oos', 'Out of service'];
+  }
   function renderUnits() {
     var teams = teamsNow(), rec = run.rec, ed = editable();
     var alt = {}; if (rec) rec.alternatives.forEach(function (a) { alt[a.teamId] = a; });
     $('units-panel').classList.toggle('editable', ed);
     $('units-sum').textContent = teams.filter(function (t) { return t.available; }).length + '/' + teams.length + ' available';
+    $('units-foot').innerHTML = ed ? '<b>Field update (simulated):</b> switch a unit to push its new status' :
+      '<span class="mdl">Source <code>resource-status-source/</code> <span class="tag stub">STUB</span></span><span class="nomdl">Last status pushed by each unit</span>';
+    $('units-head').innerHTML = '<tr><th>Unit</th><th>Status</th><th>Area</th><th>Capabilities</th><th>Dist.</th><th>Note</th>' + (ed ? '<th>In service</th>' : '') + '</tr>';
     $('units').innerHTML = teams.map(function (t) {
-      var isRec = rec && rec.teamId === t.id, st;
-      if (isRec && run.ackd) st = '<span class="st ack">ACKNOWLEDGED</span>';
-      else if (isRec && run.order) st = '<span class="st disp">DISPATCHED</span>';
-      else if (isRec) st = '<span class="st rec">RECOMMENDED</span>';
-      else st = '<span class="st ' + (t.available ? 'av-on">AVAILABLE' : 'av-off">UNAVAILABLE') + '</span>';
-      var a = alt[t.id], dist = a && a.distanceKm !== null ? ' · ' + a.distanceKm + ' km' : '';
-      var why = a && !isRec && a.excludedBecause.length ? '<div class="why">' + esc(a.excludedBecause.join('; ')) + '</div>' : '';
-      var ctl = ed ? '<div class="ctl"><span>Push status</span><label class="switch"><input type="checkbox" data-av="' + t.id + '"' + (t.available ? ' checked' : '') + '><span class="tr"></span></label></div>' : '';
-      return '<div class="unit' + (t.available ? '' : ' off') + (isRec ? ' rec' : '') + '"><span class="av">' + t.id.slice(-1) + '</span>' +
-        '<div class="nm"><span>' + esc(t.name.replace('Rescue Team ', 'Team ')) + '</span>' + st + '</div>' +
-        '<div class="meta">' + esc(ZONES[t.zoneKey].name) + dist + ' · ' + t.capabilities.map(function (c) { return CAP[c]; }).join(', ') + '</div>' + why + ctl + '</div>';
+      var c = unitCode(t), a = alt[t.id], isRec = rec && rec.teamId === t.id;
+      var note = a && !isRec && a.excludedBecause.length ? esc(a.excludedBecause.join('; ')) : isRec && run.incident ? 'Assigned to ' + esc(run.incident.id) : '';
+      return '<tr class="' + (isRec ? 'rec' : '') + (t.available ? '' : ' off') + '">' +
+        '<td><span class="u-id mono">' + t.id + '</span>' + esc(t.name.replace('Rescue Team ', '')) + '</td>' +
+        '<td><span class="code ' + c[1] + '" title="' + c[2] + '">' + c[0] + '</span></td>' +
+        '<td>' + esc(ZONES[t.zoneKey] ? ZONES[t.zoneKey].name : t.zoneKey) + '</td>' +
+        '<td>' + t.capabilities.map(function (x) { return '<span class="chip">' + (CAP[x] || x) + '</span>'; }).join('') + '</td>' +
+        '<td class="mono">' + (a && a.distanceKm !== null ? a.distanceKm + ' km' : '—') + '</td>' +
+        '<td class="u-note">' + note + '</td>' +
+        (ed ? '<td><label class="switch"><input type="checkbox" data-av="' + t.id + '"' + (t.available ? ' checked' : '') + ' aria-label="' + esc(t.name) + ' in service"><span class="tr"></span></label></td>' : '') + '</tr>';
     }).join('');
-    $('units-foot').innerHTML = ed ? '<b style="color:var(--c-team)">Your turn:</b> switch teams on or off, then send the replies.' :
-      '<span class="mdl">Status source: <code>resource-status-source/</code> <span class="tag stub">STUB</span></span><span class="nomdl">Latest status pushed by each team.</span>';
   }
 
   // ---------------- map ----------------
+  // Real map (Leaflet + Esri dark-gray tiles). The incident pin is geocoded from the caller address; unit
+  // positions are simulated (area centres); place names are real.
+  // Falls back to the SVG map below when Leaflet or the tiles cannot load (offline demo).
+  var LL = { downtown: [42.4396, -76.4966], collegetown: [42.4419, -76.4855], 'fall creek': [42.4500, -76.4930],
+             'route 13': [42.4085, -76.5455], lansing: [42.5357, -76.4908], dryden: [42.4906, -76.2977] };
+  var lmap = null, llayer = null, lfit = null, lfail = false;
+  function zoneKeyOf(z) { if (!z) return null; for (var k in ZONES) if (ZONES[k].name === z.name) return k; return null; }
+  function dropLeaflet() {
+    if (lfail) return;
+    lfail = true;
+    if (lmap) { lmap.remove(); lmap = null; llayer = null; }
+    document.querySelector('.map-panel').classList.remove('has-leaflet');
+    if (run) renderMap();
+  }
+  function initLeaflet() {
+    if (lfail) return false;
+    if (lmap) return true;
+    if (!window.L || !$('lmap')) return false;
+    lmap = L.map('lmap', { zoomControl: true, attributionControl: true, scrollWheelZoom: true }).setView([42.47, -76.44], 11);
+    var tiles = L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/Canvas/World_Dark_Gray_Base/MapServer/tile/{z}/{y}/{x}',
+      { maxZoom: 16, attribution: 'Tiles &copy; Esri &mdash; Esri, HERE, Garmin, &copy; OpenStreetMap contributors' }).addTo(lmap);
+    var tilesOk = 0, tilesBad = 0;
+    tiles.on('tileload', function () { tilesOk++; });
+    tiles.on('tileerror', function () { if (!tilesOk && ++tilesBad >= 4) dropLeaflet(); });
+    lmap.attributionControl.addAttribution('Geocoding <a href="https://photon.komoot.io">Photon</a> · Routing <a href="https://project-osrm.org">OSRM</a>');
+    llayer = L.layerGroup().addTo(lmap);
+    document.querySelector('.map-panel').classList.add('has-leaflet');
+    setTimeout(function () { if (lmap) lmap.invalidateSize(); }, 50);
+    window.addEventListener('resize', function () { if (lmap) lmap.invalidateSize(); });
+    // Re-draw overlays after every move: a fly-to interrupted by a newer one can leave vector layers mis-projected.
+    lmap.on('moveend', function () { if (run && lmap) renderLeaflet(); });
+    return true;
+  }
+  // Real-world lookups for the map display only; dispatch logic and the recommendation distance stay in the backend.
+  // Address -> point: Photon geocoder (OpenStreetMap data). Road route and drive time: OSRM demo server.
+  // Both are free public services with no key. On any failure the map falls back to the area centre / a straight line.
+  var BBOX = '-76.75,42.25,-76.2,42.65', geo = {}, routes = {};
+  function getJSON(url) {
+    var ctl = window.AbortController ? new AbortController() : null;
+    var t = setTimeout(function () { if (ctl) ctl.abort(); }, 6000);
+    return fetch(url, ctl ? { signal: ctl.signal } : {}).then(function (r) {
+      clearTimeout(t); if (!r.ok) throw new Error('HTTP ' + r.status); return r.json();
+    }, function (e) { clearTimeout(t); throw e; });
+  }
+  function mapRefresh() { if (run && lmap) renderLeaflet(); }
+  function geocode(addr) {
+    if (geo[addr]) return geo[addr];
+    geo[addr] = { state: 'pending' };
+    // Try the full address; if that only matches an area (e.g. a neighbourhood name), retry with street + town.
+    var parts = addr.split(',').map(function (x) { return x.trim(); }).filter(Boolean);
+    var qs = [addr]; if (parts.length > 2) qs.push(parts[0] + ', ' + parts[parts.length - 1]);
+    function look(q) {
+      q = /\b(NY|New York)\b/i.test(q) ? q : q + ', NY';
+      return getJSON('https://photon.komoot.io/api/?limit=1&lat=42.44&lon=-76.5&bbox=' + BBOX + '&q=' + encodeURIComponent(q))
+        .then(function (j) { return j.features && j.features[0] || null; });
+    }
+    function level(f) { var p = f.properties || {}; return p.type === 'house' || p.housenumber ? 2 : p.type === 'street' ? 1 : 0; }
+    look(qs[0]).then(function (f) {
+      return f && level(f) > 0 || !qs[1] ? f : look(qs[1]).then(function (f2) { return f2 && level(f2) > 0 ? f2 : f || f2; });
+    }).then(function (f) {
+      var p = f ? f.properties || {} : null;
+      geo[addr] = !f ? { state: 'none' } : { state: 'ok', ll: [f.geometry.coordinates[1], f.geometry.coordinates[0]],
+        match: ['area-level', 'street-level', 'address'][level(f)] + ' match', label: [p.housenumber, p.name || p.street, p.city || p.district].filter(Boolean).join(' ') };
+      mapRefresh();
+    }).catch(function () { geo[addr] = { state: 'fail' }; mapRefresh(); });
+    return geo[addr];
+  }
+  function roadRoute(a, b) {
+    var k = a.join(',') + ';' + b.join(',');
+    if (routes[k]) return routes[k];
+    routes[k] = { state: 'pending' };
+    getJSON('https://router.project-osrm.org/route/v1/driving/' + a[1] + ',' + a[0] + ';' + b[1] + ',' + b[0] + '?overview=full&geometries=geojson').then(function (j) {
+      var r = j.routes && j.routes[0];
+      routes[k] = !r ? { state: 'none' } : { state: 'ok', line: r.geometry.coordinates.map(function (c) { return [c[1], c[0]]; }), km: r.distance / 1000, min: r.duration / 60 };
+      mapRefresh();
+    }, function () { routes[k] = { state: 'fail' }; mapRefresh(); });
+    return routes[k];
+  }
+  function mapInfo(g, rt, recTeam) {
+    var el = $('map-info'); if (!el) return;
+    if (!run.report) { el.hidden = true; return; }
+    var h = g.state === 'pending' ? '<div class="mi-row"><span class="mi-k">Locating</span>Looking up the caller address…</div>' :
+      g.state === 'ok' ? '<div class="mi-row"><span class="mi-k ok">Located</span>' + esc(g.label || repLoc()) + '<small>' + g.match + ' · OpenStreetMap</small></div>' :
+      '<div class="mi-row"><span class="mi-k warn">Approx.</span>Area centre shown<small>address lookup unavailable</small></div>';
+    if (rt && recTeam) {
+      h += rt.state === 'ok' ? '<div class="mi-row"><span class="mi-k">Route</span>' + esc(recTeam.id) + ' → incident: <b>' + rt.km.toFixed(1) + ' km · ~' + Math.round(rt.min) + ' min</b><small>road route (OSRM) · recommendation used simulated grid distance</small></div>' :
+        rt.state === 'pending' ? '<div class="mi-row"><span class="mi-k">Route</span>Calculating road route…</div>' :
+        '<div class="mi-row"><span class="mi-k warn">Route</span>Straight line shown<small>routing unavailable</small></div>';
+    }
+    el.innerHTML = h; el.hidden = false;
+  }
+
+  function renderLeaflet() {
+    llayer.clearLayers();
+    var inc = run.incident, teams = teamsNow().filter(function (t) { return LL[t.zoneKey]; });
+    var rec = run.rec && run.rec.teamId;
+    var recTeam = rec ? teams.filter(function (t) { return t.id === rec; })[0] : null;
+    var rp = recTeam ? LL[recTeam.zoneKey] : null;
+    var ik = inc && inc.zone ? zoneKeyOf(inc.zone) : null, ip = null;
+    Object.keys(LL).forEach(function (k) {
+      if (!ZONES[k]) return;
+      var hot = k === ik;
+      L.circle(LL[k], { radius: hot ? 1500 : 1100, interactive: false, weight: hot ? 2 : 1, color: hot ? '#ff4d5a' : '#3d8bff', opacity: hot ? .9 : .45,
+        fillColor: hot ? '#ff4d5a' : '#3d8bff', fillOpacity: hot ? .18 : .07, dashArray: hot ? null : '4 4' }).addTo(llayer);
+      L.marker(LL[k], { interactive: false, icon: L.divIcon({ className: '', html: '<div class="zone-lab">' + esc(ZONES[k].name) + '</div>', iconSize: [0, 0], iconAnchor: [-18, 26] }) }).addTo(llayer);
+    });
+    var g = run.report && run.report.location ? geocode(run.report.location) : { state: run.report ? 'pending' : 'none' };
+    if (g.state === 'ok') ip = g.ll;
+    else if (ik && LL[ik]) {
+      var hasTeam = teams.some(function (t) { return t.zoneKey === ik; });
+      ip = [LL[ik][0] + (hasTeam ? 0.006 : 0), LL[ik][1] + (hasTeam ? 0.009 : 0)];
+    }
+    var rt = ip && rp && run.order ? roadRoute(rp, ip) : null;
+    if (rt) {
+      L.polyline(rt.state === 'ok' ? rt.line : [rp, ip], { color: run.ackd ? '#22c55e' : '#a78bfa', weight: 4, opacity: .95, className: run.ackd ? '' : 'route-line' }).addTo(llayer);
+    }
+    mapInfo(g, rt, recTeam);
+    teams.forEach(function (t) {
+      var cls = 'u-mk' + (t.available ? '' : ' off') + (rec === t.id ? ' rec' : '') + (rec === t.id && run.order && !run.ackd ? ' disp' : '');
+      var html = '<div class="' + cls + '">' + t.id.slice(-1) + '</div>' + (rec === t.id ? '<div class="u-lab">' + esc(t.name.replace('Rescue Team ', 'Unit ')) + '</div>' : '');
+      L.marker(LL[t.zoneKey], { icon: L.divIcon({ className: '', html: html, iconSize: [30, 30], iconAnchor: [15, 15] }), title: t.name, zIndexOffset: rec === t.id ? 500 : 0 }).addTo(llayer);
+    });
+    if (ip) {
+      L.marker(ip, { icon: L.divIcon({ className: '', html: '<div class="i-mk"><span class="ring"></span><span class="core"></span></div>', iconSize: [22, 22], iconAnchor: [11, 11] }), zIndexOffset: 1000, title: (run.report && run.report.location) || 'Incident' }).addTo(llayer);
+    }
+    var key = (ip ? ip.join(',') : '-') + '|' + (rec || '-') + '|' + (run.order ? 'o' : '-') + '|' + (rt ? rt.state : '-') + '|' + (phoneOpen() ? 'p' : '-');
+    if (key !== lfit) {
+      // Leaflet cannot fit a 0x0 container (hidden tab or before layout); retry on the next render.
+      var sz = lmap.getSize();
+      if (!sz.x || !sz.y) { lmap.invalidateSize(); sz = lmap.getSize(); }
+      if (!sz.x || !sz.y) return;
+      var animate = lfit !== null;
+      lfit = key;
+      lmap.stop();
+      var pts = rt && rt.state === 'ok' ? rt.line : ip && rp ? [ip, rp] : teams.map(function (t) { return LL[t.zoneKey]; }).concat(ip ? [ip] : []);
+      if (pts.length === 1) lmap.setView(pts[0], 13, { animate: animate });
+      // keep the fitted area clear of the info box (top right) and legend (bottom)
+      var left = phoneOpen() && sz.x > 700 ? 300 : 70;
+      var pad = run.report ? { paddingTopLeft: [left, 70], paddingBottomRight: [Math.min(360, sz.x / 2), 70] } : { paddingTopLeft: [left, 70], paddingBottomRight: [70, 70] };
+      if (pts.length > 1 && animate) lmap.flyToBounds(L.latLngBounds(pts), L.extend({ maxZoom: 13, duration: 0.8 }, pad));
+      else if (pts.length > 1) lmap.fitBounds(L.latLngBounds(pts), L.extend({ maxZoom: 13, animate: false }, pad));
+    }
+  }
+
   function P(z) { return { x: 40 + (z.x + 5) * 26, y: 440 - (z.y + 3) * 26 }; }
   function renderMap() {
+    if (initLeaflet()) { renderLeaflet(); renderChips(); return; }
     var inc = run.incident, zoneHit = inc && inc.zone ? inc.zone.name : null;
     var s = '<rect class="m-land" x="-400" y="-300" width="1420" height="1070"/>';
     for (var gx = -360; gx < 1000; gx += 40) s += '<line class="m-grid" x1="' + gx + '" y1="-300" x2="' + gx + '" y2="770"/>';
@@ -156,7 +360,11 @@
         (rec === t.id ? '<text class="lab" x="' + (p.x + 22) + '" y="' + (p.y + 4) + '">' + esc(t.name) + '</text>' : '') + '</g>';
     });
     $('map').innerHTML = s;
-
+    renderChips();
+  }
+  function renderChips() {
+    if (!$('metrics')) return;
+    var inc = run.incident;
     var dist = run.rec && run.rec.teamId ? run.rec.alternatives.filter(function (x) { return x.teamId === run.rec.teamId; })[0].distanceKm : null;
     var disp = run.ackd ? ['Acknowledged', 'ok'] : run.order ? ['Order sent', ''] : run.approval ? ['Approved', ''] : run.rec ? (run.rec.teamId ? ['Awaiting approval', ''] : ['No match', 'hi']) : ['—', ''];
     function c(label, v, cls) { return '<div class="mchip"><span>' + label + '</span><b class="' + (cls || '') + '">' + v + '</b></div>'; }
@@ -168,7 +376,7 @@
       c('Dispatch', disp[0], disp[1]);
   }
 
-  // ---------------- action card ----------------
+  // ---------------- incident card (one record that grows as the call is worked) ----------------
   function kv(inc) {
     function v(x) { return x ? esc(x) : '<span class="miss">Missing</span>'; }
     return '<dl class="kv"><dt>Location</dt><dd>' + v(inc.location) + '</dd><dt>Area</dt><dd>' + v(inc.zone && inc.zone.name) + '</dd>' +
@@ -177,97 +385,161 @@
       '</dd><dt>People</dt><dd>' + v(inc.peopleCount) + '</dd><dt>Urgency</dt><dd>' + esc(inc.urgency) + '</dd></dl>';
   }
   function btn(label, act, cls) { return '<button type="button" class="btn ' + (cls || 'go') + '" data-act="' + act + '">' + label + '</button>'; }
-  function acts() { return '<div class="acts">' + [].slice.call(arguments).join('') + '</div>'; }
-  var NEXT = function (l) { return acts(btn((l || 'Next step') + ' →', 'next', 'primary')); };
+  function sec(title, body, cls) { return '<section class="sec ' + (cls || '') + '"><h3>' + title + '</h3>' + body + '</section>'; }
+  function bar(who, whoCls, hint, buttons) {
+    return '<div class="ab-top"><span class="who-tag ' + whoCls + '">' + who + '</span><span class="ab-hint">' + hint + '</span></div><div class="acts">' + buttons + '</div>';
+  }
+  function short(name) { return esc(String(name || '').replace('Rescue Team ', '')); }
 
-  // Each screen returns [body, footer]; the footer always holds the one primary action.
-  var SCREENS = {
-    report: function (done) {
-      var r = run.report;
-      return ['<p class="say">A resident caught in the storm calls the emergency line. The AI voice intake agent answers at once, so there is no call queue, and transcribes the call.' +
-        '<span class="hint" style="display:block;margin-top:4px">Prototype: the call is entered as its transcript (no speech recognition yet).</span></p>' +
-        '<div class="field"><label for="f-loc">Where are you? (from the call)</label><input id="f-loc" type="text" autocomplete="off" value="' + esc(r ? r.location : SAMPLE.location) + '"' + (done ? ' disabled' : '') + '></div>' +
-        '<div class="field"><label for="f-desc">Call transcript: what help do you need?</label><textarea id="f-desc"' + (done ? ' disabled' : '') + '>' + esc(r ? r.description : SAMPLE.description) + '</textarea></div>' +
-        '<div id="form-err" class="note warn" hidden></div>' +
-        (done ? '<div class="note ok"><b>Report ' + r.id + ' registered and read back to the caller</b>' + esc(run.receipt.message) + '</div>' : ''),
-        done ? NEXT() : acts(btn('Place call', 'submit'))];
-    },
-    structure: function (done) {
-      var inc = run.incident;
-      if (done && inc.manual) return ['<p class="quote">“' + esc(run.report.description) + '”</p>' +
-        '<div class="note bad"><b>Manual handling<span class="mdl"> (SyRD 2.3.1, 2.3.3)</span></b>' + esc(inc.error) +
-        '. The agent’s output was withheld, so the coordinator handles this report by hand.</div>',
-        '<div class="note"><b>Nothing was dispatched</b>Restart to try another report.</div>'];
-      var ai = inc && /Claude/.test(inc.source || '');
-      return ['<p class="say">' + (agentInfo.enabled ? 'The <b>Claude rescue agent</b> reads the free text and fills a structured incident' : 'The free text becomes a structured incident') +
-        '. Anything it cannot determine is <b>flagged, never guessed</b>.</p>' +
-        '<p class="quote">“' + esc(run.report.description) + '”</p>' +
-        (done ? '<div><span class="cap">Structured incident ' + (ai ? '<span class="tag ai">CLAUDE AGENT</span>' : '<span class="tag stub mdl">STUB</span>') + '</span>' + kv(inc) + '</div>' +
-          (inc.missing.length ? '<div class="note warn"><b>Flagged as missing</b>' + esc(inc.missing.join(', ')) + '</div>' : '<div class="note ok"><b>All fields determined</b>No guesses were needed.</div>') : ''),
-        done ? NEXT() : acts(btn('Structure incident', 'structure'))];
-    },
-    status: function (done) {
-      var teams = teamsNow(), n = teams.filter(function (t) { return t.available; }).length;
-      return ['<p class="say">Rescue teams push their status whenever it changes<span class="mdl"> (UC.1.6)</span>. RescuTech reads the latest status<span class="mdl"> (UC.1.5)</span> without waiting for replies, and asks only teams whose status is stale to refresh<span class="mdl"> (IO.3)</span>.</p>' +
-        '<div class="big-num"><b>' + n + '/' + teams.length + '</b><span class="hint">teams currently report “available”</span></div>' +
-        (done ? '<div class="note ok"><b>Latest status of ' + run.teams.length + ' teams used</b>' +
-                (run.stale && run.stale.length ? 'Refresh requested from ' + esc(run.stale.join(', ')) + '; dispatch did not wait.' : 'No status was stale, so no refresh was needed.') + '</div>'
-              : '<div class="note"><b>Try it</b>Switch a team off in the <span class="em">Rescue teams</span> list: that is the team pushing a new status.</div>'),
-        done ? NEXT() : acts(btn('Read latest team status', 'status'))];
-    },
-    recommend: function (done) {
-      var rec = run.rec;
-      if (!done) return ['<p class="say">RescuTech matches the incident against availability, capability and distance, and explains its choice.</p>', acts(btn('Generate recommendation', 'recommend'))];
-      return ['<p class="say">One recommended team, <b>with its reasons</b>. The coordinator decides.</p>' +
-        '<div class="reco"><span class="cap">Recommended team <span class="tag stub mdl">' + (rec.briefing ? 'RULE-BASED CHOICE' : 'STUB · rule-based') + '</span></span><p class="nm">' + esc(rec.teamName || 'No suitable team') + '</p><ul>' +
-        rec.rationale.map(function (r) { return '<li>' + esc(r) + '</li>'; }).join('') + '</ul></div>' +
-        (rec.briefing ? '<div class="note ai"><b>AI briefing <span class="tag ai">CLAUDE</span></b>' + esc(rec.briefing) +
-          '<span class="hint" style="display:block;margin-top:4px">The team is chosen by fixed rules; the agent only explains it.</span></div>' : '') +
-        '<p class="hint" style="margin:0">Excluded teams show their reason in the teams list.</p>',
-        rec.teamId ? NEXT('Go to approval') : '<div class="note warn"><b>No match</b>Restart and switch more teams on.</div>'];
-    },
-    approve: function (done) {
-      var rec = run.rec;
-      return ['<p class="say">' + '<b class="mdl">S.1.5.1 Dispatch Authorization Module</b><b class="nomdl">RescuTech</b> compiles an order only for an assignment the coordinator approved. Try sending without approval first.</p>' +
-        '<div class="note"><b>' + esc(rec.teamName) + ' → ' + esc(run.incident.location) + '</b>' + esc(run.incident.assistanceNeeded || '') + '</div>' +
-        (run.guard ? '<div class="note bad"><b>409 · blocked<span class="mdl"> (SR.6, CRD 2.1.1)</span></b>' + esc(run.guard).replace(/\s*\((SR\.\d+)\)/g, '<span class="mdl"> ($1)</span>') + '</div>' : '') +
-        (done ? '<div class="note ok"><b>Approved · ' + run.approval.id + '</b>' + esc(rec.teamName) + ' approved at ' + hm(run.approval.at) + '.</div>' : ''),
-        done ? NEXT() : acts(btn('Send without approval', 'unapproved', 'danger'), btn('Approve ' + esc(rec.teamName.replace('Rescue Team ', '')), 'approve'))];
-    },
-    order: function (done) {
-      var o = run.order;
-      if (!o) return ['<p class="say">' + '<b class="mdl">S.1.5.2 Order Transmission Module</b><b class="nomdl">RescuTech</b> sends the approved order to the assigned team and records it.</p>', acts(btn('Issue dispatch order', 'issue'))];
-      return ['<p class="say">' + '<b class="mdl">S.1.5.3 Acknowledgment Verification Module</b><b class="nomdl">RescuTech</b> accepts the receipt only from the assigned team.</p>' +
-        '<div class="order"><div class="top"><span>DISPATCH ORDER ' + o.id + '</span><span>' + esc(o.urgency).toUpperCase() + '</span></div><div class="bd">' +
-        '<span class="cap">Go to</span><p class="loc">' + esc(o.location) + '</p><span class="cap">Task</span><p class="task">' + esc(o.task) + '</p>' +
-        '<dl class="kv"><dt>Team</dt><dd>' + esc(o.teamName) + '</dd><dt>Approval</dt><dd>' + o.approvalId + ' · sent ' + hm(o.issuedAt) + '</dd></dl></div></div>' +
-        (run.wrongAck ? '<div class="note bad"><b>409 · rejected<span class="mdl"> (CRD 2.4.2)</span></b>' + esc(run.wrongAck) + '</div>' : '') +
-        (done ? '<div class="note ok"><b>Receipt confirmed</b>' + esc(o.teamName) + ' acknowledged at ' + hm(run.ackd.acknowledgedAt) + '.</div>' : ''),
-        done ? NEXT('Show status') : acts(btn('Ack as another team', 'wrongack', 'danger'), btn('Acknowledge receipt', 'ack'))];
-    },
-    final: function () {
-      var o = run.ackd || run.order, st = run.status || { code: 'AWAITING_ACK' };
-      var used = {}; logCache.forEach(function (e) { e.refs.forEach(function (r) { used[r] = true; }); });
-      var ops = window.RESCUTECH_TRACE.filter(function (t) { return t.lane !== 'delivery'; });
-      var n = ops.filter(function (t) { return used[t.sr]; }).length;
-      function tl(on, what, ref, when) { return '<li class="' + (on ? 'on' : '') + '"><span class="pt"></span><div><b>' + what + '</b><small>' + esc(ref) + '</small></div><span class="when">' + hm(when) + '</span></li>'; }
-      return ['<p class="say">' + '<b class="mdl">S.1.5.4 Status Reporting Module</b><b class="nomdl">RescuTech</b>: status comes only from recorded events, so “acknowledged” never appears early.</p>' +
-        '<div><span class="pill ' + st.code + '">' + (st.code === 'ACKNOWLEDGED' ? 'Acknowledged' : 'Awaiting acknowledgment') + '</span></div>' +
-        '<ol class="tl">' + tl(true, 'Report registered', run.report.id, run.report.registeredAt) + tl(true, 'Assignment approved', run.approval.id, run.approval.at) +
-        tl(true, 'Order issued', o.id + ' → ' + o.teamName, o.issuedAt) + tl(!!o.acknowledgedAt, 'Receipt acknowledged', o.teamName, o.acknowledgedAt) + '</ol>' +
-        '<div class="note"><b>' + n + '/' + ops.length + ' operational requirements exercised</b>Arrival and rescue are outside the system boundary.</div>',
-        acts(btn('Run again', 'restart', ''), btn('Open traceability', 'open-trace', 'primary'))];
+  function cardBody() {
+    if (!run.report) {
+      var ps = phone ? phone.state() : { stage: 'idle', lines: [] };
+      if (ps.stage === 'idle' || ps.stage === 'failed') {
+        return sec('Incoming calls', '<p class="line">No call in progress. The AI voice assistant answers every call at once, so there is no call queue.</p>' +
+          '<p class="hint">Start a call on the <b>caller phone</b> over the map' + (client && client.mode() === 'http' ? ', or from a real phone on the same network: open the <b>Caller phone</b> address that <code>npm start</code> prints (…/frontend/caller.html)' : '') + '.</p>' +
+          (ps.stage === 'failed' ? '<div class="note warn"><b>Last call not registered</b>' + esc(ps.error) + '</div>' : ''));
+      }
+      return sec('Live call <span class="src">AI voice intake</span>', '<ul class="narr">' + ps.lines.map(function (l) {
+        return '<li class="' + l.who + '"><b>' + (l.who === 'ai' ? 'AI' : 'Caller') + '</b>' + esc(l.text) + '</li>';
+      }).join('') + '</ul><p class="hint">The report is registered when the assistant has the location and the need.</p>');
     }
-  };
+    var r = run.report, inc = run.incident, rec = run.rec, o = run.order, out = '';
+    out += sec('Caller statement <span class="src">Voice · ' + hm(r.registeredAt) + '</span>',
+      (r.remote ? '<p class="line">Call taken on the caller’s own phone by the AI assistant. The structured details appear after triage.</p>'
+                : '<p class="quote">“' + esc(r.description) + '”</p>') +
+      '<div class="readback"><b>Read back to caller</b>' + esc(run.receipt.message) + '</div>');
+    if (inc && inc.manual) {
+      out += sec('AI triage', '<div class="note bad"><b>Manual handling<span class="mdl"> (SyRD 2.3.1, 2.3.3)</span></b>' + esc(inc.error) + '. The agent’s output was withheld; nothing was dispatched.</div>');
+    } else if (inc) {
+      var ai = /Claude/.test(inc.source || '');
+      out += sec('AI triage ' + (ai ? '<span class="tag ai">CLAUDE</span>' : '<span class="tag rules">RULES</span><span class="tag stub mdl">STUB</span>'),
+        kv(inc) + (inc.missing.length ? '<div class="note warn"><b>Flagged, not guessed</b>' + esc(inc.missing.join(', ')) + '</div>' : ''), 'ai');
+    }
+    if (run.done[2]) {
+      var n = run.teams.filter(function (t) { return t.available; }).length;
+      out += sec('Unit availability', '<p class="line"><b>' + n + '/' + run.teams.length + '</b> units in service · ' +
+        (run.stale && run.stale.length ? 'refresh requested from ' + esc(run.stale.join(', ')) + ' (dispatch did not wait)' : 'all statuses current') + '</p>');
+    }
+    if (rec) {
+      out += sec('Recommended unit <span class="tag rules">RULE-BASED</span>', rec.teamId ?
+        '<div class="reco"><p class="nm">' + esc(rec.teamName) + (recDist() !== null ? '<span class="mono"> · ' + recDist() + ' km</span>' : '') + '</p><ul>' +
+          rec.rationale.map(function (x) { return '<li>' + esc(x) + '</li>'; }).join('') + '</ul></div>' +
+          (rec.briefing ? '<div class="note ai"><b>AI briefing <span class="tag ai">CLAUDE</span></b>' + esc(rec.briefing) +
+            '<span class="hint" style="display:block;margin-top:4px">The unit is chosen by fixed rules; the agent only explains it.</span></div>' : '')
+        : '<div class="note warn"><b>No suitable unit</b>' + rec.rationale.map(esc).join(' ') + '</div>');
+    }
+    if (run.guard || run.approval) {
+      out += sec('Authorization',
+        (run.guard ? '<div class="note bad alarm"><b>Blocked · dispatch without approval<span class="mdl"> (SR.6, CRD 2.1.1)</span></b>' + esc(run.guard).replace(/\s*\((SR\.\d+)\)/g, '<span class="mdl"> ($1)</span>') + '</div>' : '') +
+        (run.approval ? '<div class="note ok"><b>Approved · ' + run.approval.id + '</b>' + esc(rec.teamName) + ' approved by the coordinator at ' + hm(run.approval.at) + '.</div>' : ''));
+    }
+    if (o) {
+      out += sec('Dispatch order',
+        '<div class="order"><div class="top"><span>ORDER ' + o.id + '</span><span>' + esc(o.urgency).toUpperCase() + '</span></div><div class="bd">' +
+        '<span class="cap">Go to</span><p class="loc">' + esc(o.location) + '</p><span class="cap">Task</span><p class="task">' + esc(o.task) + '</p>' +
+        '<dl class="kv"><dt>Unit</dt><dd>' + esc(o.teamName) + '</dd><dt>Approval</dt><dd>' + o.approvalId + ' · sent ' + hm(o.issuedAt) + '</dd></dl></div></div>' +
+        (run.wrongAck ? '<div class="note bad alarm"><b>Rejected · wrong unit<span class="mdl"> (CRD 2.4.2)</span></b>' + esc(run.wrongAck) + '</div>' : '') +
+        (run.ackd ? '<div class="note ok"><b>Receipt confirmed</b>' + esc(o.teamName) + ' acknowledged at ' + hm(run.ackd.acknowledgedAt) + '.</div>' : ''));
+    }
+    if (run.done[STEPS.length - 1]) {
+      var a = run.ackd || o, st = run.status || { code: 'AWAITING_ACK' };
+      var used = {}; logCache.forEach(function (e) { e.refs.forEach(function (x) { used[x] = true; }); });
+      var ops = window.RESCUTECH_TRACE.filter(function (t) { return t.lane !== 'delivery'; });
+      var nn = ops.filter(function (t) { return used[t.sr]; }).length;
+      function tl(on, what, ref, when) { return '<li class="' + (on ? 'on' : '') + '"><span class="pt"></span><div><b>' + what + '</b><small>' + esc(ref) + '</small></div><span class="when">' + hm(when) + '</span></li>'; }
+      out += sec('Dispatch status <span class="pill ' + st.code + '">' + (st.code === 'ACKNOWLEDGED' ? 'Acknowledged' : 'Awaiting acknowledgment') + '</span>',
+        '<ol class="tl">' + tl(true, 'Call registered', r.id, r.registeredAt) + tl(true, 'Assignment approved', run.approval.id, run.approval.at) +
+        tl(true, 'Order issued', a.id + ' → ' + a.teamName, a.issuedAt) + tl(!!a.acknowledgedAt, 'Receipt acknowledged', a.teamName, a.acknowledgedAt) + '</ol>' +
+        '<p class="hint">Status comes only from recorded events. Arrival and rescue are outside the system boundary.</p>' +
+        '<div class="note mdl"><b>' + nn + '/' + ops.length + ' operational requirements exercised</b>See the Traceability tab.</div>');
+    }
+    return out;
+  }
+
+  function cardActions() {
+    var k = STEPS[view].key;
+    if ((run.incident && run.incident.manual) || (run.rec && !run.rec.teamId))
+      return bar('Coordinator', 'hu', 'Handle this call manually, then start a new incident.', btn('New incident', 'restart', 'primary'));
+    if (run.done[STEPS.length - 1])
+      return bar('Coordinator', 'hu', 'Dispatch confirmed. Close out and take the next call.', btn('New incident', 'restart', 'primary') + (modelOn ? btn('Open traceability', 'open-trace', '') : ''));
+    if (k === 'report') {
+      var cs = phone ? phone.state().stage : 'idle';
+      return cs === 'idle' || cs === 'failed' ? bar('Caller · simulated', 'cit', 'Waiting for a call. Start one on the caller phone, or here.', btn('Start demo call', 'call'))
+        : bar('AI agent', 'ai', 'AI voice intake is on the line with the caller…', '');
+    }
+    if (k === 'structure') return bar('AI agent', 'ai', 'Turn the transcript into a structured incident. Unknowns are flagged, never guessed.', btn('Run AI triage', 'structure'));
+    if (k === 'status') return bar('Units · simulated', 'team', 'Units push status changes. Switch a unit off in the board to try it.', btn('Confirm unit status', 'status'));
+    if (k === 'recommend') return bar('AI + rules', 'ai', 'Match availability, capability and distance. The coordinator decides.', btn('Recommend unit', 'recommend'));
+    if (k === 'approve') return bar('Coordinator', 'hu', 'Every dispatch needs your approval.', btn('Dispatch without approval', 'unapproved', 'danger') + btn('Approve ' + short(run.rec.teamName), 'approve'));
+    if (k === 'order' && !run.order) return bar('Coordinator', 'hu', 'Send the approved order to the unit’s field tablet.', btn('Send dispatch order', 'issue'));
+    if (k === 'order') {
+      var other = teamsNow().filter(function (t) { return t.id !== run.order.teamId; })[0];
+      return bar('Field tablet · simulated', 'team', 'Only the assigned unit can acknowledge.', btn('Ack as ' + (other ? other.id : 'other unit'), 'wrongack', 'danger') + btn(short(run.order.teamName) + ' acknowledges', 'ack'));
+    }
+    return '';
+  }
 
   function renderStep() {
-    var s = STEPS[view], a = ACTOR[s.actor], out = SCREENS[s.key](!!run.done[view]);
+    var s = STEPS[view];
     $('step-card').setAttribute('style', vars(s.actor));
-    $('step-top').innerHTML = '<span class="role">' + a.ab + '</span><div class="who"><b>' + esc(s.long) + '</b><span>' + a.name + ' · ' + a.iface + '</span></div>' +
-      '<span class="count">' + (view + 1) + ' / ' + STEPS.length + '</span>';
-    $('stage').innerHTML = out[0];
-    $('foot').innerHTML = out[1];
+    if (!run.report) {
+      $('inc-sub').textContent = 'New call';
+      var on = phone && phone.state().stage !== 'idle' && phone.state().stage !== 'failed';
+      $('step-top').innerHTML = '<span class="prio p0">' + (on ? 'CALL' : 'IDLE') + '</span><div class="ih-main"><div class="ih-top"><b>' + (on ? 'Call in progress' : 'Waiting for calls') + '</b>' +
+        '<span class="q-st ' + (on ? 'warn' : 'info') + '">' + (on ? 'ON CALL' : 'READY') + '</span></div><div class="ih-loc">Voice line · AI intake answers at once</div></div>';
+    } else {
+      var p = prio(), st = incState();
+      $('inc-sub').textContent = 'Opened ' + hm(run.report.registeredAt);
+      $('step-top').innerHTML = '<span class="prio ' + p[1] + '" title="Priority: ' + esc(p[2]) + '">' + p[0] + '</span><div class="ih-main"><div class="ih-top"><b class="mono">' + esc(incNo()) + '</b>' +
+        '<span class="q-st ' + st[1] + '">' + st[0] + '</span><span class="ih-time mono" id="inc-elapsed">--:--</span></div>' +
+        '<div class="ih-nat">' + esc(nature()) + '</div><div class="ih-loc">' + esc(repLoc()) + '</div></div>';
+    }
+    $('stage').innerHTML = cardBody();
+    $('foot').innerHTML = cardActions();
+    $('stage').scrollTop = $('stage').scrollHeight;
+    tick();
   }
+
+  // ---------------- caller phone (X.1 Citizen, front end only) ----------------
+  // Embedded: the simulated caller's phone over the map. Real phone: caller.html registers through the same API;
+  // when served by `npm start` the console notices the new report in the event log and takes the call.
+  var phone = null, phoneUser = null, seenRemote = {};
+  function phoneOpen() { return phoneUser !== null ? phoneUser : !run || !run.incident; }
+  function renderPhone() {
+    var open = phoneOpen();
+    $('phone-wrap').classList.toggle('open', open);
+    document.querySelector('.map-panel').classList.toggle('phone-open', open);
+    $('phone-tab').setAttribute('aria-expanded', String(open));
+    $('phone-tab').innerHTML = open ? 'Hide caller phone' : 'Caller phone' + (run && run.report && run.report.remote ? ' · real phone' : '');
+  }
+  function mountPhone() {
+    phone = window.RescuTechCallerPhone.mount($('phone'), {
+      location: SAMPLE.location, description: SAMPLE.description,
+      register: function (loc, desc) {
+        return api('POST', '/api/distress-reports', { location: loc, transcript: desc, channel: 'voice' }).then(function (r) {
+          return r.status === 201 ? { ok: true, report: r.body.report, receipt: r.body.receipt } : { ok: false, error: (r.body && r.body.error) || 'Registration failed' };
+        });
+      },
+      onChange: function () { if (run && !run.report) { renderStep(); renderTabs(); } },
+      onRegistered: function (res) { if (run.report) return; run.report = res.report; run.receipt = res.receipt; finish('Report ' + res.report.id + ' registered'); }
+    });
+  }
+  function pollRemoteCalls() {
+    if (!client || client.mode() !== 'http' || !run || run.report || !phone || phone.state().stage !== 'idle') return;
+    client.log().then(function (entries) {
+      if (run.report || phone.state().stage !== 'idle') return;
+      var hit = null;
+      entries.forEach(function (e) { var m = e.uc === 'UC.1.2' && /report (R-\d+) registered/.exec(e.text); if (m && !seenRemote[m[1]]) hit = { id: m[1], time: e.time }; });
+      if (!hit) return;
+      seenRemote[hit.id] = true;
+      run.report = { id: hit.id, location: null, description: null, registeredAt: hit.time, channel: 'voice', remote: true };
+      run.receipt = { message: 'Report details and receipt were read back to the caller on their phone.' };
+      phoneUser = false;
+      finish('Incoming call · ' + hit.id + ' from a caller phone');
+    }, function () { /* server unreachable: try again on the next poll */ });
+  }
+  setInterval(pollRemoteCalls, 2000);
+  $('phone-tab').addEventListener('click', function () { phoneUser = !phoneOpen(); renderPhone(); if (run) renderMap(); });
 
   // ---------------- model link / log / API tabs ----------------
   function linkHtml() {
@@ -303,10 +575,16 @@
   }
 
   function render() {
-    renderLane(); renderUnits(); renderMap(); renderStep(); renderTabs();
+    renderLane(); renderQueue(); renderKpis(); renderUnits(); renderPhone(); renderMap(); renderStep(); renderTabs(); tick();
     return client.log().then(function (l) { logCache = l; renderTabs(); if (STEPS[view].key === 'final') renderStep(); });
   }
-  function finish(msg) { run.done[view] = true; if (msg) toast(msg); return render(); }
+  // A finished action moves the incident on by itself; the card keeps every earlier result.
+  function finish(msg) {
+    run.done[view] = true; if (msg) toast(msg);
+    var stop = (run.incident && run.incident.manual) || (run.rec && !run.rec.teamId);
+    if (!stop && view < STEPS.length - 1) return goStep(view + 1);
+    return render();
+  }
   function goStep(i) {
     if (STEPS[i] && STEPS[i].key === 'final' && !run.status) {
       return api('GET', '/api/dispatch-orders/' + run.order.id + '/status').then(function (r) {
@@ -319,16 +597,13 @@
   // ---------------- actions (each = one API call = one sequence message group) ----------------
   var ACTS = {
     next: function () { return goStep(view + 1); },
-    submit: function () {
-      return api('POST', '/api/distress-reports', { location: $('f-loc').value, transcript: $('f-desc').value, channel: 'voice' }).then(function (r) {
-        if (r.status !== 201) { $('form-err').textContent = r.body.error; $('form-err').hidden = false; renderStep(); renderTabs(); return; }
-        run.report = r.body.report; run.receipt = r.body.receipt; return finish('Report ' + run.report.id + ' registered');
-      });
-    },
+    call: function () { if (phone) { phoneUser = null; phone.start(); } return Promise.resolve(); },
     structure: function () {
       return api('POST', '/api/distress-reports/' + run.report.id + '/incident').then(function (r) {
         if (r.status !== 201) { run.incident = { manual: true, error: r.body.error || 'Structuring failed' }; return finish('Sent to manual handling'); }
-        run.incident = r.body; return finish('Incident ' + r.body.id + ' structured');
+        run.incident = r.body;
+        if (!run.report.location && r.body.location) run.report.location = r.body.location;   // call taken on a real phone
+        return finish('Incident ' + r.body.id + ' structured');
       });
     },
     status: function () {
@@ -516,7 +791,9 @@
       }).join('') + '</tbody>';
   }
 
+  var curView = 'demo';
   function showView(v) {
+    curView = v;
     ['demo', 'arch', 'trace'].forEach(function (k) {
       $('view-' + k).hidden = k !== v;
       $('tab-' + k).setAttribute('aria-selected', String(k === v));
@@ -528,9 +805,24 @@
   }
 
   function restart() {
-    run = { done: {} }; cur = 0; view = 0; reqs = []; miniTab = modelOn ? 'link' : 'log';
+    run = { done: {} }; cur = 0; view = 0; reqs = []; miniTab = modelOn ? 'link' : 'log'; phoneUser = null; seenRemote = {};
+    if (phone) phone.reset();
     return api('POST', '/api/reset').then(function () { reqs = []; showView('demo'); return render(); });
   }
+
+  // ---------------- clock and call timer ----------------
+  function mmss(ms) { var t = Math.max(0, Math.round(ms / 1000)); return String(Math.floor(t / 60)).padStart(2, '0') + ':' + String(t % 60).padStart(2, '0'); }
+  function tick() {
+    var now = new Date(); $('clock').textContent = now.toTimeString().slice(0, 8);
+    var el = $('elapsed'), txt = '--:--';
+    var start = run && run.report ? new Date(run.report.registeredAt).getTime() : NaN;
+    var end = run && run.ackd ? new Date(run.ackd.acknowledgedAt).getTime() : NaN;
+    if (!isFinite(start)) { el.textContent = 'No active call'; el.className = 'elapsed'; }
+    else if (run.ackd) { txt = isFinite(end) ? mmss(end - start) : '--:--'; el.textContent = 'Dispatched in ' + txt; el.className = 'elapsed'; }
+    else { txt = mmss(Date.now() - start); el.textContent = 'Call open ' + txt; el.className = 'elapsed on'; }
+    ['q-elapsed', 'inc-elapsed', 'k-timer'].forEach(function (id) { var x = $(id); if (x) x.textContent = txt; });
+  }
+  setInterval(tick, 1000);
 
   // ---------------- wiring ----------------
   document.addEventListener('click', function (e) {
@@ -547,18 +839,20 @@
   });
   document.addEventListener('change', function (e) {
     var id = e.target.getAttribute && e.target.getAttribute('data-av'); if (!id) return;
-    run.avail = run.avail || {}; run.avail[id] = e.target.checked; renderUnits(); renderMap(); renderStep();
+    run.avail = run.avail || {}; run.avail[id] = e.target.checked; renderUnits(); renderKpis(); renderMap();
   });
   $('btn-restart').addEventListener('click', function () { restart(); });
   $('btn-model').addEventListener('click', function () {
     modelOn = !modelOn; miniTab = modelOn ? 'link' : 'log';
     try { localStorage.setItem('rt-model-view', modelOn ? 'on' : 'off'); } catch (e) { /* storage unavailable */ }
-    applyModel(); if (run) renderTabs();
+    applyModel(); if (curView !== 'demo' && !modelOn) showView('demo');
+    if (run) render();
   });
   applyModel();
   $('btn-checks').addEventListener('click', function () { checkResults = window.RescuTechAcceptance.runAll(); renderTrace(); });
 
   client = window.RescuTechApiClient.create(function (r) { reqs.push(r); });
+  mountPhone();
   reqs = [];
   checkResults = window.RescuTechAcceptance.runAll();
   client.detect().then(function (mode) {
