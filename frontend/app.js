@@ -76,10 +76,10 @@
     ['Received', 'F.2.1', function () { return !!run.report; }],
     ['Triaged', 'F.2.2', function () { return !!(run.incident && !run.incident.manual); }],
     ['Units', 'F.2.3', function () { return !!run.done[2]; }],
-    ['Recommend', 'F.2.4', function () { return !!(run.rec && run.rec.teamId); }],
+    ['Proposed', 'F.2.4', function () { return !!(run.rec && run.rec.teamId); }],
     ['Approved', 'F.2.5.1', function () { return !!run.approval; }],
-    ['Dispatched', 'F.2.5.2', function () { return !!run.order; }],
-    ['Ack', 'F.2.5.3', function () { return !!run.ackd; }]
+    ['Sent', 'F.2.5.2', function () { return !!run.order; }],
+    ['Ack’d', 'F.2.5.3', function () { return !!run.ackd; }]
   ];
   function renderLane() {
     var curI = -1;
@@ -162,7 +162,7 @@
     $('units-head').innerHTML = '<tr><th>Unit</th><th>Status</th><th>Area</th><th>Capabilities</th><th>Dist.</th><th>Note</th>' + (ed ? '<th>In service</th>' : '') + '</tr>';
     $('units').innerHTML = teams.map(function (t) {
       var c = unitCode(t), a = alt[t.id], isRec = rec && rec.teamId === t.id;
-      var note = a && !isRec && a.excludedBecause.length ? esc(a.excludedBecause.join('; ')) : isRec && run.incident ? 'Assigned to ' + esc(run.incident.id) : '';
+      var note = a && !isRec && a.excludedBecause.length ? esc(a.excludedBecause.join('; ')) : isRec && run.incident ? (run.ackd ? 'Acknowledged · ' : run.order ? 'Dispatched to ' : run.approval ? 'Approved for ' : 'Recommended for ') + esc(run.incident.id) : '';
       return '<tr class="' + (isRec ? 'rec' : '') + (t.available ? '' : ' off') + '">' +
         '<td><span class="u-id mono">' + t.id + '</span>' + esc(t.name.replace('Rescue Team ', '')) + '</td>' +
         '<td><span class="code ' + c[1] + '" title="' + c[2] + '">' + c[0] + '</span></td>' +
@@ -256,13 +256,13 @@
   function mapInfo(g, rt, recTeam) {
     var el = $('map-info'); if (!el) return;
     if (!run.report) { el.hidden = true; return; }
-    var h = g.state === 'pending' ? '<div class="mi-row"><span class="mi-k">Locating</span>Looking up the caller address…</div>' :
-      g.state === 'ok' ? '<div class="mi-row"><span class="mi-k ok">Located</span>' + esc(g.label || repLoc()) + '<small>' + g.match + ' · OpenStreetMap</small></div>' :
-      '<div class="mi-row"><span class="mi-k warn">Approx.</span>Area centre shown<small>address lookup unavailable</small></div>';
+    function row(k, cls, main, sub) { return '<div class="mi-row"><span class="mi-k ' + (cls || '') + '">' + k + '</span><div>' + main + (sub ? '<small>' + sub + '</small>' : '') + '</div></div>'; }
+    var h = g.state === 'pending' ? row('Locating', '', 'Looking up the caller address…') :
+      g.state === 'ok' ? row('Located', 'ok', esc(g.label || repLoc()), g.match + ' · OpenStreetMap') :
+      row('Approx.', 'warn', 'Area centre shown', 'address lookup unavailable');
     if (rt && recTeam) {
-      h += rt.state === 'ok' ? '<div class="mi-row"><span class="mi-k">Route</span>' + esc(recTeam.id) + ' → incident: <b>' + rt.km.toFixed(1) + ' km · ~' + Math.round(rt.min) + ' min</b><small>road route (OSRM) · recommendation used simulated grid distance</small></div>' :
-        rt.state === 'pending' ? '<div class="mi-row"><span class="mi-k">Route</span>Calculating road route…</div>' :
-        '<div class="mi-row"><span class="mi-k warn">Route</span>Straight line shown<small>routing unavailable</small></div>';
+      h += rt.state === 'ok' ? row('Route', '', esc(recTeam.id) + ' → incident <b>' + rt.km.toFixed(1) + ' km · ~' + Math.round(rt.min) + ' min</b>', 'road route (OSRM) · recommendation used simulated grid distance') :
+        rt.state === 'pending' ? row('Route', '', 'Calculating road route…') : row('Route', 'warn', 'Straight line shown', 'routing unavailable');
     }
     el.innerHTML = h; el.hidden = false;
   }
@@ -279,7 +279,6 @@
       var hot = k === ik;
       L.circle(LL[k], { radius: hot ? 1500 : 1100, interactive: false, weight: hot ? 2 : 1, color: hot ? '#ff4d5a' : '#3d8bff', opacity: hot ? .9 : .45,
         fillColor: hot ? '#ff4d5a' : '#3d8bff', fillOpacity: hot ? .18 : .07, dashArray: hot ? null : '4 4' }).addTo(llayer);
-      L.marker(LL[k], { interactive: false, icon: L.divIcon({ className: '', html: '<div class="zone-lab">' + esc(ZONES[k].name) + '</div>', iconSize: [0, 0], iconAnchor: [-18, 26] }) }).addTo(llayer);
     });
     var g = run.report && run.report.location ? geocode(run.report.location) : { state: run.report ? 'pending' : 'none' };
     if (g.state === 'ok') ip = g.ll;
@@ -292,10 +291,44 @@
       L.polyline(rt.state === 'ok' ? rt.line : [rp, ip], { color: run.ackd ? '#22c55e' : '#a78bfa', weight: 4, opacity: .95, className: run.ackd ? '' : 'route-line' }).addTo(llayer);
     }
     mapInfo(g, rt, recTeam);
+    // De-clutter in screen pixels: the incident pin stays put, unit markers (simulated area centres) are nudged
+    // off the pin and off each other, and area labels that would cover a marker or another label move or drop.
+    function cp(ll) { return lmap.latLngToContainerPoint(ll); }
+    var dots = [], rects = [], offs = {};
+    if (ip) { var iq = cp(ip); dots.push({ x: iq.x, y: iq.y, r: 15 }); }
+    teams.slice().sort(function (a, b) { return (b.id === rec) - (a.id === rec); }).forEach(function (t) {
+      var p = cp(LL[t.zoneKey]), x = p.x, y = p.y;
+      for (var n = 0; n < 8; n++) {
+        var hit = dots.filter(function (d) { return Math.hypot(d.x - x, d.y - y) < d.r + 16; })[0];
+        if (!hit) break;
+        var dx = x - hit.x, dy = y - hit.y, len = Math.hypot(dx, dy);
+        if (len < 1) { dx = 1; dy = 0.6; len = Math.hypot(dx, dy); }
+        x = hit.x + dx / len * (hit.r + 18); y = hit.y + dy / len * (hit.r + 18);
+      }
+      offs[t.id] = [x - p.x, y - p.y];
+      dots.push({ x: x, y: y, r: 16 });
+      if (t.id === rec) rects.push([x - 38, y + 15, 76, 16]);   // the "Unit X" name under the recommended marker
+    });
+    function clash(r) {
+      return rects.some(function (o) { return r[0] < o[0] + o[2] && r[0] + r[2] > o[0] && r[1] < o[1] + o[3] && r[1] + r[3] > o[1]; }) ||
+        dots.some(function (d) { return d.x > r[0] - d.r && d.x < r[0] + r[2] + d.r && d.y > r[1] - d.r && d.y < r[1] + r[3] + d.r; });
+    }
+    Object.keys(LL).forEach(function (k) {
+      if (!ZONES[k]) return;
+      var name = ZONES[k].name, q = cp(LL[k]), w = name.length * 7.4 + 6;
+      [[18, -26], [18, 12], [-18 - w, -26], [-18 - w, 12]].some(function (c) {
+        var r = [q.x + c[0], q.y + c[1], w, 14];
+        if (clash(r)) return false;
+        rects.push(r);
+        L.marker(LL[k], { interactive: false, icon: L.divIcon({ className: '', html: '<div class="zone-lab">' + esc(name) + '</div>', iconSize: [0, 0], iconAnchor: [-c[0], -c[1]] }) }).addTo(llayer);
+        return true;
+      });
+    });
     teams.forEach(function (t) {
       var cls = 'u-mk' + (t.available ? '' : ' off') + (rec === t.id ? ' rec' : '') + (rec === t.id && run.order && !run.ackd ? ' disp' : '');
       var html = '<div class="' + cls + '">' + t.id.slice(-1) + '</div>' + (rec === t.id ? '<div class="u-lab">' + esc(t.name.replace('Rescue Team ', 'Unit ')) + '</div>' : '');
-      L.marker(LL[t.zoneKey], { icon: L.divIcon({ className: '', html: html, iconSize: [30, 30], iconAnchor: [15, 15] }), title: t.name, zIndexOffset: rec === t.id ? 500 : 0 }).addTo(llayer);
+      var o = offs[t.id] || [0, 0];
+      L.marker(LL[t.zoneKey], { icon: L.divIcon({ className: '', html: html, iconSize: [30, 30], iconAnchor: [15 - o[0], 15 - o[1]] }), title: t.name, zIndexOffset: rec === t.id ? 500 : 0 }).addTo(llayer);
     });
     if (ip) {
       L.marker(ip, { icon: L.divIcon({ className: '', html: '<div class="i-mk"><span class="ring"></span><span class="core"></span></div>', iconSize: [22, 22], iconAnchor: [11, 11] }), zIndexOffset: 1000, title: (run.report && run.report.location) || 'Incident' }).addTo(llayer);
