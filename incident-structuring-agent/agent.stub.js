@@ -79,7 +79,7 @@
     };
   }
 
-  var api = { structure: structure, ZONES: ZONES };
+  var api = { structure: structure, ZONES: ZONES, findZone: findZone };
   if (typeof module !== 'undefined' && module.exports) module.exports = api;
   else root.IncidentStructurerStub = api;
 })(this);
