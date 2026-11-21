@@ -8,6 +8,8 @@
  *   A.5  A briefing that does not name the recommended team is withheld; the team choice never changes
  *   A.6  Instrumentation records the Claude calls at the S.1.2 and S.1.4 boundaries (Lab Manual 10.4)
  *   A.7  Dispatch (F.2.5) never calls the agent (CRD 2.3.1)
+ *   A.8  TR.1: a valid response whose zone contradicts the stated location goes to manual handling, no recommendation
+ *   A.9  TR.1: a valid response that rates an injury report Standard goes to manual handling, no recommendation
  */
 'use strict';
 var Agent = require('../incident-structuring-agent/agent.js');
@@ -53,6 +55,21 @@ function runToRecommendation(a) {
     if (inc.status !== 201) return { inc: inc };
     a.handle('POST', '/api/incidents/' + inc.body.id + '/status-requests');
     return a.handleAsync('POST', '/api/incidents/' + inc.body.id + '/recommendation').then(function (rec) { return { inc: inc, rec: rec }; });
+  });
+}
+
+// TR.1 failure path: 422, incident in manual handling, reason logged, and no recommendation can be produced.
+function manualHandlingCheck(x, transcript, reasonPattern) {
+  var a = x.api;
+  var r = a.handle('POST', '/api/distress-reports', { location: GOOD.location, transcript: transcript, channel: 'voice' }).body;
+  return a.handleAsync('POST', '/api/distress-reports/' + r.report.id + '/incident').then(function (inc) {
+    ok(inc.status === 422 && inc.body.rule === 'TR.1', 'expected 422 / TR.1, got ' + inc.status + ' ' + JSON.stringify(inc.body));
+    var stored = a.workflow().state.incidents['I-0001'];
+    ok(stored && stored.status === 'MANUAL_HANDLING', 'incident not in manual handling');
+    ok(a.workflow().state.log.some(function (e) { return reasonPattern.test(e.text); }), 'reason not logged');
+    return a.handleAsync('POST', '/api/incidents/I-0001/recommendation');
+  }).then(function (rec) {
+    ok(rec.status !== 201 && !(rec.body && rec.body.teamId), 'a recommendation was produced: ' + rec.status);
   });
 }
 
@@ -122,6 +139,21 @@ Promise.resolve()
     fs.readdirSync(dir).filter(function (n) { return /^f2-5/.test(n); }).forEach(function (n) {
       ok(!/incident-structuring-agent|createAgent|anthropic/i.test(fs.readFileSync(path.join(dir, n), 'utf8')), n + ' references the agent');
     });
+  }); })
+  .then(function () { return check('A.8', 'TR.1: zone that contradicts the stated location is withheld', function () {
+    // Well-formed but wrong: caller is in Fall Creek, Claude says Dryden.
+    var wrongZone = mockFetch(function (b) {
+      return b.tools[0].name === 'record_incident' ? toolReply('record_incident', Object.assign({}, GOOD, { zoneKey: 'dryden' })) : happy(b);
+    });
+    var x = api(wrongZone);
+    return manualHandlingCheck(x, 'Our car is stuck on Linn Street, two of us, my friend is shivering', /zone Dryden/);
+  }); })
+  .then(function () { return check('A.9', 'TR.1: injury report rated Standard is withheld', function () {
+    var lowUrgency = mockFetch(function (b) {
+      return b.tools[0].name === 'record_incident' ? toolReply('record_incident', Object.assign({}, GOOD, { urgency: 'Standard' })) : happy(b);
+    });
+    var x = api(lowUrgency);
+    return manualHandlingCheck(x, 'Our car is stuck, two of us, my friend is injured and bleeding', /urgency Standard/);
   }); })
   .then(function () {
     var failed = 0;
