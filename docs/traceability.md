@@ -62,7 +62,7 @@ C.3, C.4). Not yet built, so not tested: CRD 2.2.2 (offline acknowledgment queue
   1.2.1–1.2.2) and interface (1.3.1–1.3.3) requirements, each allocated to S.1.5.1–S.1.5.4 and verified by a test case
   TC.CRD.x.
 - **Flow-down example:** SyRD 2.5.1, the USD 50/month language-model budget, is **apportioned** across subsystems
-  (S.1.2 60 %, S.1.4 40 %, S.1.5 0 %) and becomes CRD 2.3.1 "Shall issue dispatch orders without invoking the
+  (re-apportioned in ADR 0006: S.1.1 10 % for speech-to-text, S.1.2 54 %, S.1.4 36 %, S.1.3 and S.1.5 0 %) and becomes CRD 2.3.1 "Shall issue dispatch orders without invoking the
   language model" (test `test_CRD_2_3_1_no_language_model_in_dispatch_management`). Other methods used: equivalence
   (SyRD 2.1.1 → CRD 2.1.1) and synthesis (SyRD 2.2.2 → CRD 2.2.2).
 

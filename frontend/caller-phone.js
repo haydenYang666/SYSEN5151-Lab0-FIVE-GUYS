@@ -4,7 +4,8 @@
  * they need, registers the report through the same REST route as everything else (POST /api/distress-reports,
  * passed in as `register`), then reads the details and the receipt back. The citizen sees only what the
  * system gives them (UC.1.3 receipt: registration, not dispatch).
- * Prototype: the caller's words are typed as a transcript; there is no speech recognition.
+ * Speech: when the page passes `transcribe` (caller.html with a server that has speech-to-text, ADR 0006), the citizen
+ * can speak the description; the transcript fills the field for review before calling. Otherwise the words are typed.
  * Used twice: embedded in the dispatch console (index.html) and full screen on a real phone (caller.html).
  */
 (function (root) {
@@ -21,7 +22,7 @@
    */
   function mount(el, opt) {
     var pace = opt.pace || 1, st, timer = null;
-    function fresh() { return { stage: 'idle', lines: [], typing: false, loc: opt.location || '', desc: opt.description || '', report: null, receipt: null, error: null, t0: 0, t1: 0 }; }
+    function fresh() { return { rec: null, note: null, stage: 'idle', lines: [], typing: false, loc: opt.location || '', desc: opt.description || '', report: null, receipt: null, error: null, t0: 0, t1: 0 }; }
     st = fresh();
 
     function statusBar() {
@@ -38,9 +39,11 @@
         h += '<div class="cp-idle"><div class="cp-line"><b>Emergency</b><span>RescuTech emergency line · Tompkins County</span></div>' +
           '<label class="cp-f"><span>You say: where are you?</span><input data-f="loc" type="text" autocomplete="off" value="' + esc(st.loc) + '"></label>' +
           '<label class="cp-f"><span>You say: what is happening?</span><textarea data-f="desc">' + esc(st.desc) + '</textarea></label>' +
+          (opt.transcribe ? '<button type="button" class="cp-again cp-mic" data-ph="' + (st.rec ? 'stop' : 'speak') + '">' + (st.rec ? 'Stop and transcribe' : 'Speak instead of typing') + '</button>' : '') +
+          (st.note ? '<p class="cp-note" role="status">' + esc(st.note) + '</p>' : '') +
           (st.error ? '<p class="cp-err" role="alert">' + esc(st.error) + '</p>' : '') +
           '<button type="button" class="cp-call" data-ph="call" aria-label="Call the emergency line"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6.6 10.8a15.1 15.1 0 0 0 6.6 6.6l2.2-2.2c.3-.3.7-.4 1-.2 1.1.4 2.3.6 3.6.6.6 0 1 .4 1 1V20c0 .6-.4 1-1 1A17 17 0 0 1 3 4c0-.6.4-1 1-1h3.5c.6 0 1 .4 1 1 0 1.3.2 2.5.6 3.6.1.3 0 .7-.2 1L6.6 10.8z"/></svg></button>' +
-          '<p class="cp-note">Simulated call · your words are entered as text (no speech recognition in this prototype). Fictional scenario.</p></div>';
+          '<p class="cp-note">Simulated call · ' + (opt.transcribe ? 'speak or type your words' : 'your words are entered as text') + '. Fictional scenario.</p></div>';
       } else {
         var live = st.stage === 'dialing' || st.stage === 'talking';
         h += '<div class="cp-head"><span class="cp-av" aria-hidden="true">AI</span><div><b>RescuTech Emergency</b><span>' +
@@ -92,14 +95,36 @@
           st.typing = false; st.error = 'The emergency line could not be reached (' + (e && e.message || e) + ').'; st.stage = 'failed'; st.t1 = Date.now(); render();
         });
     }
+    // Records the description and asks the page to transcribe it (POST /api/transcriptions, UC.1.2).
+    function speak() {
+      if (!navigator.mediaDevices || !window.MediaRecorder) { st.note = 'Recording is not available in this browser. Please type.'; render(); return; }
+      navigator.mediaDevices.getUserMedia({ audio: true }).then(function (stream) {
+        var mr = new MediaRecorder(stream), chunks = [];
+        mr.ondataavailable = function (e) { chunks.push(e.data); };
+        mr.onstop = function () {
+          stream.getTracks().forEach(function (t) { t.stop(); });
+          var seconds = (Date.now() - st.rec.t0) / 1000;
+          st.rec = null; st.note = 'Transcribing…'; render();
+          opt.transcribe(new Blob(chunks, { type: mr.mimeType || 'audio/webm' }), seconds).then(function (r) {
+            if (r.ok) { st.desc = r.transcript; st.note = 'Transcribed. Check the text, then call.'; }
+            else st.note = r.queued ? 'No connection: your recording is saved and will be transcribed when the connection returns.' : (r.error || 'Speech-to-text is not available.') + ' Please type.';
+            render();
+          });
+        };
+        mr.start(); st.rec = { mr: mr, t0: Date.now() }; st.note = 'Recording… tap Stop when you have finished.'; render();
+      }, function () { st.note = 'Microphone permission was refused. Please type.'; render(); });
+    }
+    function stopSpeaking() { if (st.rec) st.rec.mr.stop(); }
+    function setTranscript(text) { st.desc = text; st.note = 'Your saved recording was transcribed. Check the text, then call.'; render(); }
     function reset() { var keepLoc = st.loc, keepDesc = st.desc; st = fresh(); if (keepLoc) st.loc = keepLoc; if (keepDesc) st.desc = keepDesc; render(); }
     el.addEventListener('click', function (e) {
       var b = e.target.closest && e.target.closest('[data-ph]'); if (!b) return;
       var a = b.getAttribute('data-ph');
       if (a === 'call') start(); else if (a === 'again' || a === 'retry') reset();
+      else if (a === 'speak') speak(); else if (a === 'stop') stopSpeaking();
     });
     render();
-    return { start: start, reset: function () { st = fresh(); render(); }, state: function () { return st; } };
+    return { start: start, reset: function () { st = fresh(); render(); }, state: function () { return st; }, setTranscript: setTranscript };
   }
   root.RescuTechCallerPhone = { mount: mount };
 })(this);

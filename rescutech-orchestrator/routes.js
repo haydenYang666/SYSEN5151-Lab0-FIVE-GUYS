@@ -38,6 +38,8 @@
     };
     var wf = Workflow.createWorkflow(opts);
     var agent = opts.agent && opts.agent.enabled() ? opts.agent : null;
+    // S.1.1.A2 hosted speech-to-text (ADR 0006); server only. Without it the caller types the report.
+    var transcriber = opts.transcriber && opts.transcriber.enabled() ? opts.transcriber : null;
 
     function guard(fn) {
       try { return fn(); } catch (e) {
@@ -58,6 +60,14 @@
         return { status: 200, body: agent ? agent.status() : { enabled: false, provider: 'keyword stub', model: null } };
       }],
 
+      ['GET', '/api/transcriber', [], function () {
+        return { status: 200, body: transcriber ? transcriber.status() : { enabled: false, provider: 'typed transcript (fallback)', model: null } };
+      }],
+      // UC.1.2 Answer and Transcribe Call: recorded audio -> transcript (S.1.1.A2). Only the server path can transcribe;
+      // here (no transcriber) the caller is told to type the report instead (SR.1 text fallback).
+      ['POST', '/api/transcriptions', ['UC.1.2'], function () {
+        return { status: 503, body: { error: 'Speech-to-text is not available; please type the report.', fallback: 'typed' } };
+      }],
       ['POST', '/api/distress-reports', ['UC.1.1', 'UC.1.2', 'UC.1.3'], function (p, b) {
         var r = wf.submitDistressReport(b || {});
         return r.ok ? { status: 201, body: r } : { status: 422, body: { error: r.error, rule: 'SR.1' } };
@@ -157,6 +167,15 @@
       if (!hit) return Promise.resolve({ status: 404, body: { error: 'No route for ' + method + ' ' + path } });
       var pattern = hit.route[1];
       var t0 = hr();
+      if (transcriber && pattern === '/api/transcriptions') {
+        return transcriber.transcribe(body || {}).then(function (out) {
+          span('stt', 'Speech-to-text call', 'UC.1.2', 'S.1.1 Report Intake', t0, hr(), { outcome: out.text ? 'ok' : (out.invalid ? 'invalid' : 'unavailable') });
+          if (out.text) return { status: 200, body: { transcript: out.text, model: out.model, seconds: out.seconds } };
+          wf.state.log.push({ time: new Date(), uc: 'UC.1.2', actor: 'RescuTech', refs: ['SR.1', '2.5.1'], kind: 'warn',
+                              text: 'Speech-to-text ' + (out.invalid ? 'refused (' + out.invalid + ')' : 'unavailable (' + out.unavailable + ')') + '; caller asked to type the report.' });
+          return { status: out.invalid ? 422 : 503, body: { error: out.invalid || out.unavailable, fallback: 'typed' } };
+        });
+      }
       if (agent && pattern === '/api/distress-reports/:id/incident' && wf.state.reports[hit.params.id]) {
         var rr = wf.registeredReport(hit.params.id);
         return agent.structure({ location: rr.location, description: rr.description }).then(function (out) {

@@ -19,6 +19,7 @@ The front end calls nothing outside this table.
 | # | Entry point | Use case step(s) | Called by | Notes |
 |---|-------------|------------------|-----------|-------|
 | 1 | `POST /api/distress-reports` | UC.1.1 Call Emergency Line, UC.1.2 Answer and Transcribe Call, UC.1.3 Confirm Report Details | Citizen call (transcript, `channel: voice`) or text fallback | 422 if location or description is missing (SR.1); the prototype receives the call transcript, see ADR 0005 |
+| 1a | `POST /api/transcriptions` | UC.1.2 Answer and Transcribe Call | Caller page, "Speak instead of typing" | Recorded audio to transcript through the hosted API (S.1.1.A2, ADR 0006); 503 with typed fallback when not configured or unavailable |
 | 2 | `POST /api/distress-reports/:id/incident` | UC.1.4 Structure Incident Information | Demo step "structure" | Claude agent when the server has an API key, otherwise the keyword stub |
 | 3 | `PUT /api/teams/:teamId/status` | UC.1.6 Push Status Update | Simulated Rescue Team, any time | IO.4 is optional for UC.1.7: nothing waits for it |
 | 4 | `POST /api/incidents/:id/status-requests` | UC.1.5 Retrieve Latest Team Status | Demo step "team status" | Reads the latest pushed status; sends IO.3 Status Refresh Request only to stale teams |
