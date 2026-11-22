@@ -11,11 +11,13 @@ var fs = require('fs');
 var path = require('path');
 var Routes = require('./routes.js');
 var Agent = require('../incident-structuring-agent/agent.js');
+var Transcriber = require('../speech-intake/transcriber.js');
 
 var ROOT = path.join(__dirname, '..');
 var PORT = Number(process.env.PORT) || 3000;
 var agent = Agent.createAgent();
-var api = Routes.createApi({ agent: agent });
+var transcriber = Transcriber.createTranscriber();
+var api = Routes.createApi({ agent: agent, transcriber: transcriber });
 var TYPES = { '.html': 'text/html; charset=utf-8', '.js': 'text/javascript; charset=utf-8', '.css': 'text/css; charset=utf-8',
               '.json': 'application/json', '.svg': 'image/svg+xml', '.png': 'image/png' };
 
@@ -49,6 +51,8 @@ http.createServer(function (req, res) {
   var a = agent.status();
   console.log('RescuTech running at http://localhost:' + PORT + ' · structuring: ' +
               (a.enabled ? 'Claude agent (' + a.model + '), budget $' + a.budgetUsd + '/month' : 'keyword stub (set ANTHROPIC_API_KEY to use Claude)'));
+  var s = transcriber.status();
+  console.log('Speech-to-text: ' + (s.enabled ? s.model + ', budget $' + s.budgetUsd + '/month (S.1.1, ADR 0006)' : 'not configured (set OPENAI_API_KEY); callers type the report'));
   // Caller phone (X.1): open this on a phone on the same network.
   var nets = require('os').networkInterfaces();
   Object.keys(nets).forEach(function (n) {

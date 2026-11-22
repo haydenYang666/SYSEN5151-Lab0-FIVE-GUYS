@@ -43,10 +43,41 @@
   ready.then(function () {
     if (!online) note('Not connected to a RescuTech server. Start it on the laptop with <code>npm start</code> and open <code>http://&lt;laptop-address&gt;:3000/frontend/caller.html</code> on a phone on the same network.');
   });
-  window.RescuTechCallerPhone.mount(document.getElementById('phone'), {
+  // Speech-to-text (S.1.1.A2, ADR 0006): offered only when the server has it configured.
+  var sttOn = false;
+  var sttReady = ready.then(function () {
+    if (!online) return false;
+    return fetch('/api/transcriber').then(function (r) { return r.json(); }).then(function (s) { return !!s.enabled; }).catch(function () { return false; });
+  });
+  function toBase64(blob) {
+    return new Promise(function (res, rej) { var fr = new FileReader(); fr.onload = function () { res(String(fr.result).split(',')[1]); }; fr.onerror = rej; fr.readAsDataURL(blob); });
+  }
+  // SyRD 2.2.2: with no connection the recording is kept on the phone and sent when the connection returns.
+  var PENDING = 'rescutech-pending-audio';
+  function savePending(item) { try { localStorage.setItem(PENDING, JSON.stringify(item)); return true; } catch (e) { return false; } }
+  function takePending() { try { var v = JSON.parse(localStorage.getItem(PENDING) || 'null'); localStorage.removeItem(PENDING); return v; } catch (e) { return null; } }
+  function postAudio(item) {
+    return fetch('/api/transcriptions', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(item) })
+      .then(function (r) { return r.json().then(function (b) { return r.status === 200 ? { ok: true, transcript: b.transcript } : { ok: false, error: b.error }; }); });
+  }
+  function transcribe(blob, seconds) {
+    return toBase64(blob).then(function (audio) {
+      var item = { audio: audio, mimeType: blob.type, seconds: Math.round(seconds * 10) / 10 };
+      if (!navigator.onLine) return { ok: false, queued: savePending(item) };
+      return postAudio(item).catch(function () { return { ok: false, queued: savePending(item) }; });
+    });
+  }
+  var phone;
+  window.addEventListener('online', function () {
+    var item = takePending(); if (!item) return;
+    postAudio(item).then(function (r) { if (r.ok && phone) phone.setTranscript(r.transcript); else if (!r.ok) savePending(item); }, function () { savePending(item); });
+  });
+  sttReady.then(function (on) { sttOn = on; if (on) phone.reset(); });
+  phone = window.RescuTechCallerPhone.mount(document.getElementById('phone'), {
     location: '412 Fall Creek Dr, Fall Creek, Ithaca',
     description: 'Our car is stuck on a snow-blocked road. Two adults inside, one is shivering badly and may have hypothermia.',
     allowNewCall: true,
+    get transcribe() { return sttOn ? transcribe : null; },
     register: function (loc, desc) {
       return ready.then(function () {
         if (!online) return { ok: false, error: 'The emergency line is not reachable from this page (no RescuTech server).' };

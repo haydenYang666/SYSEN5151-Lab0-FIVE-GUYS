@@ -5,7 +5,7 @@
   "description": "SYSEN 5151 Team 15 \u2014 RescuTech walking skeleton for UC.1 (no dependencies)",
   "scripts": {
     "start": "node rescutech-orchestrator/server.js",
-    "test": "node tests/acceptance.spec.js && node tests/contract.spec.js && node tests/functional-requirements.spec.js && node tests/agent.spec.js",
+    "test": "node tests/acceptance.spec.js && node tests/contract.spec.js && node tests/functional-requirements.spec.js && node tests/agent.spec.js && node tests/transcriber.spec.js",
     "generate:stubs": "node scripts/generate-stubs.js",
     "check:stubs": "node scripts/generate-stubs.js --check",
     "test:py": "pytest tests/test_functional_requirements.py -v",
