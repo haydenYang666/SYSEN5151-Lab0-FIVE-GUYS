@@ -17,7 +17,7 @@ transcript used by UC.1.2 and F.2.1. Telephony is out of scope: the Citizen uses
 | Works offline | No | Records offline, sends later | Yes, once the model is cached |
 
 ## Criteria and measures
-Swing weights (proposed, for team confirmation): C1 time to transcript 0.278, C4 degraded-network operation 0.250,
+Swing weights (confirmed by the team, 2026-11-22): C1 time to transcript 0.278, C4 degraded-network operation 0.250,
 C2 key-field accuracy 0.222, C3 caller-data exposure 0.139, C5 caller device coverage 0.111. C1, C2 and C5 levels are
 estimates from published sources (no spike session was run; the spike tool is `frontend/stt-spike.html`); C3 and C4
 come from the design. Weighted value: **A2 84.1**, A3 80.2, A1 53.3. 36-month LCC: A1 USD 2,835, A2 6,283, A3 6,573.
