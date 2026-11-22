@@ -1,0 +1,193 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>RescuTech speech-to-text spike</title>
+<style>
+  :root { --ink:#111; --muted:#666; --line:#ddd; --ok:#1b7a34; --bad:#b3261e; --bg:#fff; }
+  body { margin:0; font:15px/1.45 system-ui, -apple-system, Segoe UI, sans-serif; color:var(--ink); background:var(--bg); }
+  main { max-width:900px; margin:0 auto; padding:16px; }
+  h1 { font-size:20px; margin:0 0 4px; } h2 { font-size:16px; margin:20px 0 8px; }
+  p.note { color:var(--muted); margin:4px 0 12px; font-size:13px; }
+  .row { display:flex; flex-wrap:wrap; gap:8px; align-items:center; margin:8px 0; }
+  select, button, label { font:inherit; }
+  button { padding:8px 14px; border:1px solid #888; border-radius:6px; background:#f4f4f4; cursor:pointer; }
+  button.primary { background:#111; color:#fff; border-color:#111; }
+  button:disabled { opacity:.45; cursor:default; }
+  .script { border:1px solid var(--line); border-radius:8px; padding:12px; font-size:17px; background:#fafafa; }
+  .status { font-family:ui-monospace, Menlo, monospace; font-size:13px; color:var(--muted); min-height:1.4em; }
+  table { width:100%; border-collapse:collapse; font-size:13px; margin-top:8px; }
+  th, td { border-bottom:1px solid var(--line); padding:5px 6px; text-align:left; vertical-align:top; }
+  td.ok { color:var(--ok); font-weight:600; } td.bad { color:var(--bad); font-weight:600; }
+  .summary { display:grid; grid-template-columns:repeat(auto-fit,minmax(200px,1fr)); gap:8px; }
+  .card { border:1px solid var(--line); border-radius:8px; padding:10px; }
+  .card b { display:block; font-size:13px; color:var(--muted); font-weight:600; }
+</style>
+</head>
+<body>
+<main>
+  <h1>Speech-to-text spike (Decision D.1)</h1>
+  <p class="note">Measures C1 time to transcript and C2 key-field accuracy for A1 (browser speech recognition) and
+  A3 (local Whisper model in the browser), and records audio for A2 (hosted API, run with
+  <code>scripts/stt-spike/hosted.js</code>). Read each script aloud, tap <b>Done speaking</b> right after the last word.
+  C1 is measured from that tap to the full transcript. Nothing is sent anywhere by this page except what A1's browser
+  service does on its own; results stay on this device until you download them.</p>
+
+  <div class="row">
+    <label>Alternative
+      <select id="alt">
+        <option value="A1">A1 Browser speech recognition</option>
+        <option value="A3">A3 Local Whisper model (in browser)</option>
+        <option value="REC">Record only (for A2)</option>
+      </select></label>
+    <label id="localWrap"><input type="checkbox" id="local"> A1: require on-device (processLocally)</label>
+    <label id="gpuWrap"><input type="checkbox" id="gpu"> A3: use WebGPU</label>
+    <button id="load">Load model</button>
+  </div>
+  <div class="status" id="support"></div>
+
+  <h2>Call <span id="idx">1</span> of 10</h2>
+  <div class="script" id="script">Loading test calls…</div>
+  <div class="row">
+    <button class="primary" id="start">Start</button>
+    <button id="done" disabled>Done speaking</button>
+    <button id="prev">Previous</button>
+    <button id="next">Next</button>
+  </div>
+  <div class="status" id="status"></div>
+
+  <h2>Summary</h2>
+  <div class="summary" id="summary"></div>
+  <div class="row">
+    <button id="csv">Download results (CSV)</button>
+    <button id="clear">Clear results</button>
+  </div>
+
+  <h2>Results</h2>
+  <table><thead><tr><th>Alt.</th><th>#</th><th>C1 (s)</th><th>Correct</th><th>Zone / caps got</th><th>WER</th><th>Transcript</th><th>Audio</th></tr></thead>
+  <tbody id="rows"></tbody></table>
+</main>
+
+<script src="../incident-structuring-agent/agent.stub.js"></script>
+<script src="../scripts/stt-spike/score.js"></script>
+<script type="module">
+const $ = (id) => document.getElementById(id);
+let calls = [], i = 0, results = [], rec = null, media = null, chunks = [], tDone = 0, asr = null, loadMs = null;
+const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
+const store = { get() { try { return JSON.parse(localStorage.getItem('stt-spike') || '[]'); } catch (e) { return []; } },
+                set(v) { try { localStorage.setItem('stt-spike', JSON.stringify(v)); } catch (e) {} } };
+results = store.get();
+
+$('support').textContent = [
+  'A1 speech recognition: ' + (SR ? 'available' : 'NOT available in this browser'),
+  'on-device option: ' + (SR && 'processLocally' in SR.prototype ? 'yes' : 'no'),
+  'WebGPU: ' + ('gpu' in navigator ? 'yes' : 'no'),
+  'MediaRecorder: ' + ('MediaRecorder' in window ? 'yes' : 'no')
+].join(' · ');
+
+function show() {
+  const c = calls[i]; if (!c) return;
+  $('idx').textContent = i + 1;
+  $('script').textContent = SttSpike.scriptOf(c);
+  const alt = $('alt').value;
+  $('localWrap').hidden = alt !== 'A1'; $('gpuWrap').hidden = alt !== 'A3'; $('load').hidden = alt !== 'A3';
+}
+function status(t) { $('status').textContent = t; }
+
+function finish(transcript, audioUrl) {
+  const ms = performance.now() - tDone, alt = $('alt').value, c = calls[i];
+  const s = alt === 'REC' ? null : SttSpike.score(c, transcript);
+  results.push({ alt: alt + (alt === 'A1' && $('local').checked ? ' (on-device)' : '') + (alt === 'A3' && $('gpu').checked ? ' (WebGPU)' : ''),
+    call: i + 1, c1: alt === 'REC' ? null : Math.round(ms) / 1000, correct: s ? s.correct : null,
+    got: s ? (s.got.zone || 'no zone') + ' / ' + (s.got.caps || 'none') : '', wer: s ? s.wer : null,
+    transcript: transcript || '', audio: audioUrl ? 'call' + String(i + 1).padStart(2, '0') + '.webm' : '',
+    loadMs: alt === 'A3' ? loadMs : null, ua: navigator.userAgent, at: new Date().toISOString() });
+  store.set(results); render();
+  $('start').disabled = false; $('done').disabled = true;
+  status(alt === 'REC' ? 'Recorded.' : 'Transcript in ' + (Math.round(ms) / 1000) + ' s.');
+}
+
+function render() {
+  $('rows').innerHTML = results.map(r => `<tr><td>${r.alt}</td><td>${r.call}</td><td>${r.c1 ?? ''}</td>
+    <td class="${r.correct === null ? '' : r.correct ? 'ok' : 'bad'}">${r.correct === null ? '' : r.correct ? 'yes' : 'no'}</td>
+    <td>${r.got}</td><td>${r.wer ?? ''}</td><td>${(r.transcript || '').replace(/</g, '&lt;')}</td><td>${r.audio}</td></tr>`).join('');
+  const by = {};
+  results.filter(r => r.c1 !== null).forEach(r => { (by[r.alt] = by[r.alt] || []).push(r); });
+  $('summary').innerHTML = Object.keys(by).map(k => {
+    const rs = by[k], ok = rs.filter(r => r.correct).length;
+    return `<div class="card"><b>${k}</b>C1 median ${SttSpike.median(rs.map(r => r.c1))} s<br>C2 ${Math.round(100 * ok / rs.length)}% (${ok}/${rs.length})</div>`;
+  }).join('') || '<div class="note">No results yet.</div>';
+}
+
+async function startMic() {
+  media = await navigator.mediaDevices.getUserMedia({ audio: true });
+  const mr = new MediaRecorder(media); chunks = [];
+  mr.ondataavailable = (e) => chunks.push(e.data);
+  mr.start(); return mr;
+}
+function saveAudio(blob) {
+  const url = URL.createObjectURL(blob), a = document.createElement('a');
+  a.href = url; a.download = 'call' + String(i + 1).padStart(2, '0') + '.webm'; a.click();
+  return url;
+}
+
+let mr = null;
+$('start').onclick = async () => {
+  const alt = $('alt').value; $('start').disabled = true; $('done').disabled = false;
+  if (alt === 'A1') {
+    if (!SR) { status('Speech recognition is not available in this browser (record this for C5).'); $('start').disabled = false; return; }
+    rec = new SR(); rec.lang = 'en-US'; rec.continuous = true; rec.interimResults = false;
+    if ($('local').checked && 'processLocally' in rec) rec.processLocally = true;
+    let text = [];
+    rec.onresult = (e) => { for (let k = e.resultIndex; k < e.results.length; k++) if (e.results[k].isFinal) text.push(e.results[k][0].transcript); };
+    rec.onerror = (e) => { status('A1 error: ' + e.error + (e.error === 'network' ? ' (no connection: record as fail for C4)' : '')); };
+    rec.onend = () => finish(text.join(' ').trim());
+    rec.start(); status('Listening… read the script, then tap Done speaking.');
+  } else {
+    if (alt === 'A3' && !asr) { status('Load the model first.'); $('start').disabled = false; $('done').disabled = true; return; }
+    mr = await startMic(); status('Recording… read the script, then tap Done speaking.');
+  }
+};
+$('done').onclick = async () => {
+  tDone = performance.now(); $('done').disabled = true;
+  const alt = $('alt').value;
+  if (alt === 'A1') { rec.stop(); status('Waiting for transcript…'); return; }
+  mr.onstop = async () => {
+    media.getTracks().forEach(t => t.stop());
+    const blob = new Blob(chunks, { type: mr.mimeType || 'audio/webm' });
+    if (alt === 'REC') { saveAudio(blob); finish('', true); return; }
+    status('Transcribing…');
+    const ctx = new AudioContext({ sampleRate: 16000 });
+    const pcm = (await ctx.decodeAudioData(await blob.arrayBuffer())).getChannelData(0);
+    const out = await asr(pcm);
+    finish((out.text || '').trim());
+  };
+  mr.stop();
+};
+$('load').onclick = async () => {
+  status('Downloading model (first time only)…'); const t0 = performance.now();
+  const { pipeline } = await import('https://cdn.jsdelivr.net/npm/@huggingface/transformers@3.8.1');
+  const gpu = $('gpu').checked && 'gpu' in navigator;
+  asr = await pipeline('automatic-speech-recognition', 'onnx-community/whisper-base.en',
+    gpu ? { device: 'webgpu', dtype: { encoder_model: 'fp32', decoder_model_merged: 'q4' } } : { device: 'wasm', dtype: 'q8' });
+  loadMs = Math.round(performance.now() - t0);
+  status('Model ready in ' + (loadMs / 1000).toFixed(1) + ' s (' + (gpu ? 'WebGPU' : 'WASM') + ').');
+};
+$('prev').onclick = () => { i = Math.max(0, i - 1); show(); };
+$('next').onclick = () => { i = Math.min(calls.length - 1, i + 1); show(); };
+$('alt').onchange = show;
+$('clear').onclick = () => { if (results.length) { results = []; store.set(results); render(); } };
+$('csv').onclick = () => {
+  const cols = ['alt', 'call', 'c1', 'correct', 'got', 'wer', 'transcript', 'audio', 'loadMs', 'ua', 'at'];
+  const esc = (v) => '"' + String(v ?? '').replace(/"/g, '""') + '"';
+  const csv = [cols.join(',')].concat(results.map(r => cols.map(c => esc(r[c])).join(','))).join('\n');
+  const a = document.createElement('a'); a.href = URL.createObjectURL(new Blob([csv], { type: 'text/csv' }));
+  a.download = 'stt-spike-results.csv'; a.click();
+};
+
+fetch('../tests/fixtures/distress-calls.json').then(r => r.json()).then(d => { calls = d; show(); render(); })
+  .catch(() => { $('script').textContent = 'Could not load test calls. Open this page through npm start (http://localhost:3000/frontend/stt-spike.html) or GitHub Pages.'; });
+</script>
+</body>
+</html>
