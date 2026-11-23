@@ -18,17 +18,33 @@ transcript used by UC.1.2 and F.2.1. Telephony is out of scope: the Citizen uses
 
 ## Criteria and measures
 Swing weights (confirmed by the team, 2026-11-22): C1 time to transcript 0.278, C4 degraded-network operation 0.250,
-C2 key-field accuracy 0.222, C3 caller-data exposure 0.139, C5 caller device coverage 0.111. C1, C2 and C5 levels are
-estimates from published sources (no spike session was run; the spike tool is `frontend/stt-spike.html`); C3 and C4
-come from the design. Weighted value: **A2 84.1**, A3 80.2, A1 53.3. 36-month LCC: A1 USD 2,835, A2 6,283, A3 6,573.
+C2 key-field accuracy 0.222, C3 caller-data exposure 0.139, C5 caller device coverage 0.111.
+
+Spike, 2026-11-22 (Yanda Shen; ten storm calls each, Windows desktop, Chrome; `frontend/stt-spike.html`,
+`scripts/stt-spike/hosted.js`):
+
+| | C1 median | C2 key fields correct |
+|---|---|---|
+| A1 browser recognition | 0.08 s | 5/10 |
+| A2 hosted API (gpt-transcribe) | 0.83 s | 7/10 |
+| A3 Whisper base.en, WebGPU | 1.01 s (first call 3.84 s, model load 10.0 s) | 4/10 |
+
+C3 and C4 come from the design; C5 from published browser support (only a desktop was tested).
+Weighted value: **A3 76.3, A2 74.0**, A1 36.9. 36-month LCC: A1 USD 2,835, A2 6,283, A3 6,573.
 
 ## Decision
 **A2, hosted transcription API**, implemented in `speech-intake/transcriber.js`, route `POST /api/transcriptions`
 (UC.1.2) and the caller page (`frontend/caller.html`, "Speak instead of typing"). The transcript fills the
 description field for the Citizen to check before calling; registration is unchanged (`POST /api/distress-reports`).
 
-The decision is provisional. A3 overtakes A2 if the C3 weight rises above 0.23, the C4 weight above 0.33, or the C1
-weight falls below 0.20, and the A2/A3 levels are estimates. Re-run the trade with spike measurements before a pilot.
+A3 scored 2.3 points higher, but A2 is selected because:
+1. the margin is inside the measurement uncertainty: A2 is first again if the C2 weight exceeds 0.26 or the C4
+   weight falls below 0.19, and one C2 call for A2 is worth 4.4 points;
+2. A3's C1 was measured on a desktop GPU; A2 overtakes A3 once A3's C1 exceeds about 1.8 s, which is likely on phones;
+3. A2 had the best key-field accuracy (7/10), the criterion tied to TR.1.
+
+The decision is provisional: repeat the spike on an Android phone and an iPhone before a pilot; if A3's median C1
+there stays below 1.8 s, or caller-data exposure is weighted higher, re-run the trade.
 
 ## Budget (SyRD 2.5.1)
 The Week 10 apportionment gave S.1.1 USD 0 of the USD 50/month model budget (S.1.2 30, S.1.4 20). A2 runs at about
